@@ -106,7 +106,7 @@ class Estilos:
         estilo.map(
             "TNotebook.Tab",
             background=[("selected", Cores.PRIMARIA)],
-            foreground=[("selected", Cores.TEXTO_CLARO)],
+            foreground=[("selected", Cores.TEXTO)],
             font=[("selected", ("Segoe UI", 10, "bold"))],
         )
 
@@ -338,7 +338,13 @@ class FormularioBase(ttk.Frame):
                 opcoes = []
             
             # Definir valor padrão
-            valor_inicial = padrao if padrao and padrao in opcoes else (opcoes[0] if opcoes else "")
+            # Se padrao for fornecido, usá-lo mesmo que não esteja em opcoes
+            # Isso garante que valores de banco de dados sejam exibidos corretamente
+            valor_inicial = padrao if padrao else (opcoes[0] if opcoes else "")
+            
+            # Se o valor padrão não estiver nas opções, adicioná-lo
+            if valor_inicial and valor_inicial not in opcoes and valor_inicial.strip():
+                opcoes.append(valor_inicial)
             
             var = tk.StringVar(value=valor_inicial)
             entrada = ttk.Combobox(
@@ -862,6 +868,34 @@ def validar_numerico(event):
     if event.char.isdigit() or event.keysym in ("BackSpace", "Delete", "Left", "Right"):
         return True
     return False
+
+
+def formatar_nup_sei(entry, event=None):
+    """Formata o campo para NUP/SEI no padrão 33902.000595/2016-64"""
+    import re
+
+    texto = entry.get().replace(".", "").replace("/", "").replace("-", "")
+    # Remove caracteres não numéricos
+    texto = re.sub(r"[^\d]", "", texto)
+
+    # Limita a 17 dígitos (5+6+4+2)
+    if len(texto) > 17:
+        texto = texto[:17]
+
+    # Formata conforme a quantidade de dígitos
+    if len(texto) > 15:  # Tem os 2 últimos dígitos
+        texto = f"{texto[:5]}.{texto[5:11]}/{texto[11:15]}-{texto[15:]}"
+    elif len(texto) > 11:  # Tem os 4 dígitos do ano
+        texto = f"{texto[:5]}.{texto[5:11]}/{texto[11:]}"
+    elif len(texto) > 5:  # Tem os 6 dígitos após o ponto
+        texto = f"{texto[:5]}.{texto[5:]}"
+    elif len(texto) > 0:  # Tem apenas os primeiros dígitos
+        texto = texto
+
+    # Atualiza o campo
+    entry.delete(0, tk.END)
+    entry.insert(0, texto)
+    return True
 
 
 def converter_valor_brl_para_float(valor_str):

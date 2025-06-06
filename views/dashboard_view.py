@@ -254,12 +254,18 @@ class DashboardView:
             ):
                 try:
                     # Formatar valor monetário
-                    valor = float(produto[7]) if produto[7] else 0.0
-                    valor_formatado = (
-                        f"R$ {valor:,.2f}".replace(",", "X")
-                        .replace(".", ",")
-                        .replace("X", ".")
-                    )
+                    try:
+                        # Valor está no índice 8 (9ª coluna da tabela produto_pf)
+                        valor = float(produto[8]) if produto[8] else 0.0
+                        valor_formatado = (
+                            f"R$ {valor:,.2f}".replace(",", "X")
+                            .replace(".", ",")
+                            .replace("X", ".")
+                        )
+                    except (ValueError, IndexError):
+                        # Se não conseguir converter para float ou o índice não existir
+                        valor_formatado = "R$ 0,00"
+                        print(f"Erro ao processar valor do produto: {produto}")
 
                     # Extrair nome da pessoa
                     nome_completo = produto[-1] if len(produto) > 8 else "N/A"
@@ -271,12 +277,12 @@ class DashboardView:
                         "entregue": "Entregue",
                         "cancelado": "Cancelado",
                     }
-                    status_exibicao = status_map.get(produto[5], produto[5])
+                    status_exibicao = status_map.get(produto[6], produto[6])
 
                     valores = {
                         "id": produto[0],
                         "nome_completo": nome_completo,
-                        "titulo": produto[6],
+                        "titulo": produto[7],  # Título está no índice 7 (8ª coluna da tabela produto_pf)
                         "status": status_exibicao,
                         "valor": valor_formatado,
                     }

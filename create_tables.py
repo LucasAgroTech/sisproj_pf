@@ -264,10 +264,96 @@ def fix_modalidade_constraint():
         conn.close()
 
 
+def fix_constraints():
+    """Corrige os constraints da tabela contrato_pf para aceitar valores em maiúsculo e com espaços"""
+    
+    conn = sqlite3.connect("sisproj_pf.db")
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar quantos contratos existem
+        cursor.execute('SELECT COUNT(*) FROM contrato_pf')
+        count = cursor.fetchone()[0]
+        print(f'Contratos existentes: {count}')
+        
+        if count > 0:
+            # Backup dos dados existentes
+            cursor.execute('''
+                CREATE TEMPORARY TABLE contrato_pf_backup AS 
+                SELECT * FROM contrato_pf
+            ''')
+            print('Backup dos contratos criado.')
+        
+        # Remover a tabela atual
+        cursor.execute('DROP TABLE IF EXISTS contrato_pf')
+        print('Tabela contrato_pf removida.')
+        
+        # Recriar a tabela com os constraints atualizados
+        cursor.execute('''
+            CREATE TABLE contrato_pf (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo_demanda INTEGER,
+                id_pessoa_fisica INTEGER,
+                instituicao TEXT, 
+                instrumento TEXT, 
+                subprojeto TEXT, 
+                ta TEXT, 
+                pta TEXT, 
+                acao TEXT,
+                resultado TEXT, 
+                meta TEXT, 
+                modalidade TEXT CHECK(modalidade IN ('BOLSA', 'PRODUTO', 'RPA', 'CLT')),
+                natureza_demanda TEXT CHECK(natureza_demanda IN ('NOVO', 'RENOVAÇÃO', 'novo', 'renovacao')),
+                numero_contrato TEXT,
+                vigencia_inicial TEXT,
+                vigencia_final TEXT,
+                meses INTEGER,
+                status_contrato TEXT CHECK(status_contrato IN (
+                    'ASSINATURA PENDENTE', 'CANCELADO', 'CONCLUÍDO', 'EM TRAMITAÇÃO', 
+                    'AGUARDANDO AUTORIZAÇÃO', 'NÃO AUTORIZADO', 'RESCINDIDO', 'VIGENTE',
+                    'pendente_assinatura', 'cancelado', 'concluido', 'em_tramitacao', 
+                    'aguardando_autorizacao', 'nao_autorizado', 'rescindido', 'vigente'
+                )),
+                remuneracao REAL,
+                intersticio INTEGER CHECK(intersticio IN (0, 1)),
+                valor_intersticio REAL,
+                valor_complementar REAL,
+                total_contrato REAL,
+                observacoes TEXT,
+                FOREIGN KEY (codigo_demanda) REFERENCES demanda(codigo),
+                FOREIGN KEY (id_pessoa_fisica) REFERENCES pessoa_fisica(id)
+            )
+        ''')
+        print('Tabela contrato_pf recriada com constraints atualizados.')
+        
+        if count > 0:
+            # Restaurar os dados
+            cursor.execute('''
+                INSERT INTO contrato_pf 
+                SELECT * FROM contrato_pf_backup
+            ''')
+            print(f'Dados restaurados ({count} contratos).')
+            
+            # Remover backup temporário
+            cursor.execute('DROP TABLE contrato_pf_backup')
+        
+        conn.commit()
+        print('Constraints atualizados com sucesso!')
+        
+    except Exception as e:
+        print(f'Erro ao atualizar constraints: {e}')
+        conn.rollback()
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     import sys
     
-    if len(sys.argv) > 1 and sys.argv[1] == "fix":
-        fix_modalidade_constraint()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "fix":
+            fix_modalidade_constraint()
+        elif sys.argv[1] == "fix_constraints":
+            fix_constraints()
     else:
         create_tables()

@@ -11,6 +11,8 @@ from controllers.produto_pf_controller import (
     listar_produtos_por_contrato,
     editar_produto,
     excluir_produto,
+    obter_proximo_numero_produto,
+    obter_instrumentos,
 )
 from controllers.contrato_pf_controller import listar_contratos, buscar_contrato_por_id
 from utils.ui_utils import (
@@ -122,17 +124,32 @@ class ProdutoPFForm(FormularioBase):
                     f"{contrato[13]} - {contrato[-1]}"
                 )  # Número do contrato e nome da pessoa
                 self.atualizar_info_contrato(contrato)
+                
+                # Se não estiver em modo de edição, definir o próximo número de produto
+                if not self.modo_edicao:
+                    proximo_numero = obter_proximo_numero_produto(id_contrato)
+                    # Vamos armazenar o próximo número para definir no campo depois que ele for criado
+                    self.proximo_numero_produto = proximo_numero
 
         # Separador
         ttk.Separator(self).pack(fill=tk.X, pady=10)
 
         # Campos do produto
+        # Se temos um próximo número de produto definido e não estamos em modo de edição, usá-lo
+        numero_padrao = ""
+        if self.modo_edicao and produto:
+            numero_padrao = produto[2]
+        elif hasattr(self, 'proximo_numero_produto'):
+            numero_padrao = str(self.proximo_numero_produto)
+            
         self.adicionar_campo(
             "numero",
             "Número do Produto",
-            padrao=produto[2] if produto else "",
+            padrao=numero_padrao,
             required=True,
         )
+        # Tornar o campo de número do produto somente leitura
+        self.campos["numero"]["widget"].configure(state="readonly")
 
         self.adicionar_campo(
             "data_programada",
@@ -148,10 +165,6 @@ class ProdutoPFForm(FormularioBase):
         )
 
         self.adicionar_campo(
-            "instrumento", "Instrumento", padrao=produto[4] if produto else ""
-        )
-
-        self.adicionar_campo(
             "data_entrega",
             "Data de Entrega",
             tipo="data",
@@ -161,6 +174,20 @@ class ProdutoPFForm(FormularioBase):
         data_entrega_widget = self.campos["data_entrega"]["widget"]
         data_entrega_widget.bind(
             "<KeyRelease>", lambda e: formatar_data(data_entrega_widget, e)
+        )
+        
+        # Obter lista de instrumentos da tabela de custeio
+        instrumentos = obter_instrumentos()
+        # Adicionar o valor atual do produto se estiver em modo de edição
+        if produto and produto[4] and produto[4] not in instrumentos:
+            instrumentos.append(produto[4])
+            
+        self.adicionar_campo(
+            "instrumento", 
+            "Instrumento", 
+            tipo="opcoes",
+            opcoes=instrumentos,
+            padrao=produto[4] if produto else ""
         )
 
         # Status do produto
@@ -412,6 +439,17 @@ class ProdutoPFForm(FormularioBase):
             contrato = buscar_contrato_por_id(id_contrato)
             if contrato:
                 self.atualizar_info_contrato(contrato)
+                
+                # Se não estiver em modo de edição, atualiza o número do produto automaticamente
+                if not self.modo_edicao:
+                    # Obter o próximo número de produto para este contrato
+                    proximo_numero = obter_proximo_numero_produto(id_contrato)
+                    
+                    # Atualizar o campo de número (precisa mudar para normal para editar)
+                    self.campos["numero"]["widget"].configure(state="normal")
+                    self.campos["numero"]["widget"].delete(0, tk.END)
+                    self.campos["numero"]["widget"].insert(0, str(proximo_numero))
+                    self.campos["numero"]["widget"].configure(state="readonly")
 
     def atualizar_info_contrato(self, contrato):
         """Atualiza o label de informações do contrato"""
@@ -523,7 +561,6 @@ class ProdutoPFForm(FormularioBase):
                     status_real,
                     valores["titulo"],
                     valor,
-                    observacoes,
                 )
                 mostrar_mensagem(
                     "Sucesso", "Produto atualizado com sucesso!", tipo="sucesso"
@@ -538,7 +575,6 @@ class ProdutoPFForm(FormularioBase):
                     status_real,
                     valores["titulo"],
                     valor,
-                    observacoes,
                 )
                 mostrar_mensagem(
                     "Sucesso", "Produto cadastrado com sucesso!", tipo="sucesso"
