@@ -30,6 +30,7 @@ from controllers.produto_pf_controller import (
     excluir_produto,
     buscar_produto_por_id,
 )
+from controllers.custeio_controller import CusteioController
 from utils.ui_utils import (
     FormularioBase,
     TabelaBase,
@@ -384,8 +385,13 @@ class ContratoPFForm(FormularioBase):
         self.form_custeio = FormularioBase(self.tab_custeio, "")
         self.form_custeio.pack(fill=tk.BOTH, expand=True)
 
-        # Opções para instituição
-        instituicoes_opcoes = ["OPAS", "FIOCRUZ"]
+        # Inicializar o controller de custeio
+        self.custeio_controller = CusteioController()
+
+        # Obter todas as instituições disponíveis
+        instituicoes_opcoes = self.custeio_controller.get_institutions()
+        if not instituicoes_opcoes:
+            instituicoes_opcoes = ["OPAS", "FIOCRUZ"]  # fallback
 
         # Garantir que a instituição seja uma das opções válidas
         instituicao_padrao = ""
@@ -393,10 +399,11 @@ class ContratoPFForm(FormularioBase):
             if contrato[3] in instituicoes_opcoes:
                 instituicao_padrao = contrato[3]
             else:
-                instituicao_padrao = instituicoes_opcoes[0]
+                instituicao_padrao = instituicoes_opcoes[0] if instituicoes_opcoes else ""
         else:
-            instituicao_padrao = instituicoes_opcoes[0]
+            instituicao_padrao = instituicoes_opcoes[0] if instituicoes_opcoes else ""
 
+        # Campo Instituição
         self.form_custeio.adicionar_campo(
             "instituicao",
             "Instituição",
@@ -406,31 +413,88 @@ class ContratoPFForm(FormularioBase):
             required=True,
         )
 
-        # Inicialmente, adicionamos opções vazias para evitar erro
+        # Campo Instrumento (Projeto)
+        projetos_iniciais = []
+        if instituicao_padrao:
+            projetos_iniciais = self.custeio_controller.get_projects(instituicao_padrao)
+        
+        instrumento_padrao = contrato[4] if contrato and len(contrato) > 4 else ""
+        
+        # Garantir que o valor original esteja nas opções se for modo edição
+        if self.modo_edicao and instrumento_padrao and instrumento_padrao not in projetos_iniciais:
+            projetos_iniciais.append(instrumento_padrao)
+        
         self.form_custeio.adicionar_campo(
             "instrumento",
             "Instrumento",
             tipo="opcoes",
-            opcoes=["TC 132", "TC 145", "TC 150"],
-            padrao=contrato[4] if contrato and len(contrato) > 4 else "",
+            opcoes=projetos_iniciais,
+            padrao=instrumento_padrao,
         )
 
+        # Campo Subprojeto (3ª posição - puxando da tabela custeio)
+        subprojetos_iniciais = []
+        if instituicao_padrao and instrumento_padrao:
+            subprojetos_iniciais = self.custeio_controller.get_subprojects(instituicao_padrao, instrumento_padrao)
+        
+        subprojeto_padrao = contrato[5] if contrato and len(contrato) > 5 else ""
+        
+        # Garantir que o valor original esteja nas opções se for modo edição
+        if self.modo_edicao and subprojeto_padrao and subprojeto_padrao not in subprojetos_iniciais:
+            subprojetos_iniciais.append(subprojeto_padrao)
+        
         self.form_custeio.adicionar_campo(
             "subprojeto",
             "Subprojeto",
             tipo="opcoes",
-            opcoes=["SP 1", "SP 2", "SP 3"],
-            padrao=contrato[5] if contrato and len(contrato) > 5 else "",
+            opcoes=subprojetos_iniciais,
+            padrao=subprojeto_padrao,
         )
 
+        # Campo TA (4ª posição)
+        tas_iniciais = []
+        if instituicao_padrao and instrumento_padrao:
+            # Para OPAS e outras instituições, carregar TAs baseado em instituição + instrumento
+            if instituicao_padrao == "OPAS" or instituicao_padrao not in ["FIOCRUZ"]:
+                tas_iniciais = self.custeio_controller.get_tas(instituicao_padrao, instrumento_padrao)
+        
+        ta_padrao = contrato[6] if contrato and len(contrato) > 6 else ""
+        
+        # Garantir que o valor original esteja nas opções se for modo edição
+        if self.modo_edicao and ta_padrao and ta_padrao not in tas_iniciais:
+            tas_iniciais.append(ta_padrao)
+        
         self.form_custeio.adicionar_campo(
             "ta",
             "TA",
             tipo="opcoes",
-            opcoes=["1TA", "2TA", "3TA"],
-            padrao=contrato[6] if contrato and len(contrato) > 6 else "",
+            opcoes=tas_iniciais,
+            padrao=ta_padrao,
         )
 
+        # Campo Resultado (5ª posição)
+        resultados_iniciais = []
+        ta_padrao_value = contrato[6] if contrato and len(contrato) > 6 else ""
+        if instituicao_padrao and instrumento_padrao and ta_padrao_value:
+            # Para OPAS e outras instituições, carregar resultados baseado em instituição + instrumento + TA
+            if instituicao_padrao == "OPAS" or instituicao_padrao not in ["FIOCRUZ"]:
+                resultados_iniciais = self.custeio_controller.get_results(instituicao_padrao, instrumento_padrao, ta_padrao_value)
+        
+        resultado_padrao = contrato[9] if contrato and len(contrato) > 9 else ""
+        
+        # Garantir que o valor original esteja nas opções se for modo edição
+        if self.modo_edicao and resultado_padrao and resultado_padrao not in resultados_iniciais:
+            resultados_iniciais.append(resultado_padrao)
+        
+        self.form_custeio.adicionar_campo(
+            "resultado",
+            "Resultado",
+            tipo="opcoes",
+            opcoes=resultados_iniciais,
+            padrao=resultado_padrao,
+        )
+
+        # Campo PTA (6ª posição - mantido como estava, não vem da base de custeio)
         self.form_custeio.adicionar_campo(
             "pta",
             "PTA",
@@ -439,6 +503,7 @@ class ContratoPFForm(FormularioBase):
             padrao=contrato[7] if contrato and len(contrato) > 7 else "",
         )
 
+        # Campo Ação (7ª posição - mantido como estava, não vem da base de custeio)
         self.form_custeio.adicionar_campo(
             "acao",
             "Ação",
@@ -447,21 +512,22 @@ class ContratoPFForm(FormularioBase):
             padrao=contrato[8] if contrato and len(contrato) > 8 else "",
         )
 
-        self.form_custeio.adicionar_campo(
-            "resultado",
-            "Resultado",
-            tipo="opcoes",
-            opcoes=["RE 01", "RE 02", "RE 03"],
-            padrao=contrato[9] if contrato and len(contrato) > 9 else "",
-        )
-
+        # Campo Meta (8ª posição - sempre lista de 01 a 35)
+        meta_opcoes = [f"{i:02d}" for i in range(1, 36)]  # Lista de 01 até 35
         self.form_custeio.adicionar_campo(
             "meta",
             "Meta",
             tipo="opcoes",
-            opcoes=["Meta 1", "Meta 2", "Meta 3"],
+            opcoes=meta_opcoes,
             padrao=contrato[10] if contrato and len(contrato) > 10 else "",
         )
+
+        # Configurar eventos de mudança para os filtros hierárquicos
+        self.configurar_filtros_custeio()
+
+        # Aplicar regras da instituição inicial
+        if instituicao_padrao:
+            self.aplicar_regras_instituicao(instituicao_padrao)
 
         # Aba de contrato (quarta aba)
         self.tab_contrato = ttk.Frame(self.notebook)
@@ -2023,6 +2089,267 @@ class ContratoPFForm(FormularioBase):
         """Cancela a operação e fecha o formulário"""
         self.callback_cancelar()
 
+    def configurar_filtros_custeio(self):
+        """Configurar eventos de mudança para os filtros hierárquicos de custeio"""
+        
+        # Obter os widgets dos campos
+        instituicao_widget = self.form_custeio.campos["instituicao"]["widget"]
+        instrumento_widget = self.form_custeio.campos["instrumento"]["widget"]
+        subprojeto_widget = self.form_custeio.campos["subprojeto"]["widget"]
+        ta_widget = self.form_custeio.campos["ta"]["widget"]
+        resultado_widget = self.form_custeio.campos["resultado"]["widget"]
+        meta_widget = self.form_custeio.campos["meta"]["widget"]
+        
+        # Configurar eventos de seleção
+        instituicao_widget.bind("<<ComboboxSelected>>", self.on_instituicao_changed)
+        instrumento_widget.bind("<<ComboboxSelected>>", self.on_instrumento_changed)
+        subprojeto_widget.bind("<<ComboboxSelected>>", self.on_subprojeto_changed)
+        ta_widget.bind("<<ComboboxSelected>>", self.on_ta_changed)
+        resultado_widget.bind("<<ComboboxSelected>>", self.on_resultado_changed)
+        
+        # Sincronizar Meta com Subprojeto
+        meta_widget.bind("<<ComboboxSelected>>", self.on_meta_changed)
+    
+    def on_instituicao_changed(self, event=None):
+        """Atualizar opções quando a instituição for alterada"""
+        try:
+            instituicao_selecionada = self.form_custeio.campos["instituicao"]["widget"].get()
+            
+            # Aplicar regras específicas por instituição
+            self.aplicar_regras_instituicao(instituicao_selecionada)
+            
+            # Atualizar projetos baseado na instituição
+            projetos = self.custeio_controller.get_projects(instituicao_selecionada)
+            
+            # Se for modo edição, garantir que o valor original esteja nas opções
+            if self.modo_edicao and self.contrato and len(self.contrato) > 4 and self.contrato[4]:
+                if self.contrato[4] not in projetos:
+                    projetos.append(self.contrato[4])
+            
+            instrumento_widget = self.form_custeio.campos["instrumento"]["widget"]
+            instrumento_widget["values"] = projetos
+            
+            # Se for modo edição, manter o valor original se ainda estiver válido
+            if not self.modo_edicao:
+                instrumento_widget.set("")  # Limpar seleção apenas para novos cadastros
+            
+            # Atualizar campos dependentes
+            self.atualizar_campos_dependentes_instrumento()
+            
+        except Exception as e:
+            print(f"Erro ao atualizar projetos: {e}")
+
+    def aplicar_regras_instituicao(self, instituicao):
+        """Aplica regras específicas de habilitação/desabilitação baseadas na instituição"""
+        try:
+            # Obter widgets dos campos
+            subprojeto_widget = self.form_custeio.campos["subprojeto"]["widget"]
+            ta_widget = self.form_custeio.campos["ta"]["widget"]
+            resultado_widget = self.form_custeio.campos["resultado"]["widget"]
+            pta_widget = self.form_custeio.campos["pta"]["widget"]
+            acao_widget = self.form_custeio.campos["acao"]["widget"]
+            meta_widget = self.form_custeio.campos["meta"]["widget"]
+            
+            if instituicao == "FIOCRUZ":
+                # FIOCRUZ: Manter apenas Instituição, Instrumento e Subprojeto habilitados
+                subprojeto_widget.configure(state="readonly")  # Habilitado (3ª posição)
+                ta_widget.configure(state="disabled")
+                resultado_widget.configure(state="disabled")
+                pta_widget.configure(state="disabled")
+                acao_widget.configure(state="disabled")
+                meta_widget.configure(state="disabled")  # Meta desabilitado para FIOCRUZ
+                
+                # Limpar campos desabilitados apenas se não for modo edição
+                if not self.modo_edicao:
+                    ta_widget.set("")
+                    resultado_widget.set("")
+                    pta_widget.set("")
+                    acao_widget.set("")
+                    meta_widget.set("")  # Limpar Meta quando desabilitado
+                
+            elif instituicao == "OPAS":
+                # OPAS: Desabilitar apenas o campo Subprojeto, Meta habilitado com lista fixa
+                subprojeto_widget.configure(state="disabled")  # Desabilitado
+                ta_widget.configure(state="readonly")
+                resultado_widget.configure(state="readonly")
+                pta_widget.configure(state="readonly")
+                acao_widget.configure(state="readonly")
+                meta_widget.configure(state="readonly")  # Meta habilitado com lista fixa
+                
+                # Limpar campo desabilitado apenas se não for modo edição
+                if not self.modo_edicao:
+                    subprojeto_widget.set("")
+                
+            else:
+                # Outras instituições: Habilitar todos os campos, Meta com lista fixa
+                subprojeto_widget.configure(state="readonly")
+                ta_widget.configure(state="readonly")
+                resultado_widget.configure(state="readonly")
+                pta_widget.configure(state="readonly")
+                acao_widget.configure(state="readonly")
+                meta_widget.configure(state="readonly")  # Meta habilitado com lista fixa
+                
+        except Exception as e:
+            print(f"Erro ao aplicar regras da instituição: {e}")
+
+    def atualizar_campos_dependentes_instrumento(self):
+        """Atualizar campos que dependem de instrumento"""
+        try:
+            instituicao = self.form_custeio.campos["instituicao"]["widget"].get()
+            instrumento = self.form_custeio.campos["instrumento"]["widget"].get()
+            
+            # Atualizar subprojetos
+            subprojetos = []
+            if instituicao and instrumento:
+                subprojetos = self.custeio_controller.get_subprojects(instituicao, instrumento)
+            
+            # Se for modo edição, garantir que o valor original esteja nas opções
+            if self.modo_edicao and self.contrato and len(self.contrato) > 5 and self.contrato[5]:
+                if self.contrato[5] not in subprojetos:
+                    subprojetos.append(self.contrato[5])
+            
+            self.form_custeio.campos["subprojeto"]["widget"]["values"] = subprojetos
+            if not self.modo_edicao:
+                self.form_custeio.campos["subprojeto"]["widget"].set("")
+            
+            # Atualizar TAs
+            tas = []
+            if instituicao and instrumento and (instituicao == "OPAS" or instituicao not in ["FIOCRUZ"]):
+                tas = self.custeio_controller.get_tas(instituicao, instrumento)
+            
+            # Se for modo edição, garantir que o valor original esteja nas opções
+            if self.modo_edicao and self.contrato and len(self.contrato) > 6 and self.contrato[6]:
+                if self.contrato[6] not in tas:
+                    tas.append(self.contrato[6])
+            
+            self.form_custeio.campos["ta"]["widget"]["values"] = tas
+            if not self.modo_edicao:
+                self.form_custeio.campos["ta"]["widget"].set("")
+            
+            # Limpar resultados
+            self.form_custeio.campos["resultado"]["widget"]["values"] = []
+            if not self.modo_edicao:
+                self.form_custeio.campos["resultado"]["widget"].set("")
+            
+            # Para FIOCRUZ, limpar Meta pois fica desabilitado
+            # Para outras instituições, Meta mantém lista fixa de 01 a 35
+            if instituicao == "FIOCRUZ" and not self.modo_edicao:
+                self.form_custeio.campos["meta"]["widget"].set("")
+            
+        except Exception as e:
+            print(f"Erro ao atualizar campos dependentes: {e}")
+
+    def on_instrumento_changed(self, event=None):
+        """Atualizar opções quando o instrumento/projeto for alterado"""
+        try:
+            self.atualizar_campos_dependentes_instrumento()
+            
+        except Exception as e:
+            print(f"Erro ao atualizar subprojetos: {e}")
+
+    def on_subprojeto_changed(self, event=None):
+        """Atualizar opções quando o subprojeto for alterado"""
+        try:
+            instituicao = self.form_custeio.campos["instituicao"]["widget"].get()
+            instrumento = self.form_custeio.campos["instrumento"]["widget"].get()
+            
+            # Para FIOCRUZ, subprojeto é o último campo ativo
+            if instituicao == "FIOCRUZ":
+                return
+            
+            # Para OPAS, subprojeto está desabilitado, então não faz nada aqui
+            if instituicao == "OPAS":
+                return
+                
+            # Para outras instituições, atualizar TAs baseado em instituição e projeto
+            tas = self.custeio_controller.get_tas(instituicao, instrumento)
+            
+            # Se for modo edição, garantir que o valor original esteja nas opções
+            if self.modo_edicao and self.contrato and len(self.contrato) > 6 and self.contrato[6]:
+                if self.contrato[6] not in tas:
+                    tas.append(self.contrato[6])
+            
+            ta_widget = self.form_custeio.campos["ta"]["widget"]
+            ta_widget["values"] = tas
+            if not self.modo_edicao:
+                ta_widget.set("")  # Limpar seleção apenas para novos cadastros
+            
+            # Limpar campos dependentes apenas para novos cadastros
+            self.form_custeio.campos["resultado"]["widget"]["values"] = []
+            if not self.modo_edicao:
+                self.form_custeio.campos["resultado"]["widget"].set("")
+            
+        except Exception as e:
+            print(f"Erro ao atualizar TAs: {e}")
+
+    def on_ta_changed(self, event=None):
+        """Atualizar opções quando o TA for alterado"""
+        try:
+            instituicao = self.form_custeio.campos["instituicao"]["widget"].get()
+            
+            # FIOCRUZ não usa TA, então não faz nada
+            if instituicao == "FIOCRUZ":
+                return
+                
+            instrumento = self.form_custeio.campos["instrumento"]["widget"].get()
+            ta = self.form_custeio.campos["ta"]["widget"].get()
+            
+            # Atualizar resultados baseado na instituição, projeto e TA
+            resultados = self.custeio_controller.get_results(instituicao, instrumento, ta)
+            
+            # Se for modo edição, garantir que o valor original esteja nas opções
+            if self.modo_edicao and self.contrato and len(self.contrato) > 9 and self.contrato[9]:
+                if self.contrato[9] not in resultados:
+                    resultados.append(self.contrato[9])
+            
+            resultado_widget = self.form_custeio.campos["resultado"]["widget"]
+            resultado_widget["values"] = resultados
+            if not self.modo_edicao:
+                resultado_widget.set("")  # Limpar seleção apenas para novos cadastros
+                
+        except Exception as e:
+            print(f"Erro ao atualizar resultados: {e}")
+
+    def on_resultado_changed(self, event=None):
+        """Atualizar opções quando o resultado for alterado"""
+        try:
+            instituicao = self.form_custeio.campos["instituicao"]["widget"].get()
+            
+            # FIOCRUZ não usa Resultado, então não faz nada
+            if instituicao == "FIOCRUZ":
+                return
+                
+            # Meta sempre mantém lista fixa de 01 a 35 (não atualiza mais baseado em filtros)
+            # Removido todo o código que atualizava meta baseado em subprojetos filtrados
+            
+        except Exception as e:
+            print(f"Erro ao atualizar meta: {e}")
+    
+    
+    def on_meta_changed(self, event=None):
+        """Meta agora é independente e não sincroniza mais com Subprojeto"""
+        try:
+            # Meta agora é um campo independente com lista fixa de 01 a 35
+            # Não há mais sincronização com subprojeto
+            pass
+                
+        except Exception as e:
+            print(f"Erro no campo meta: {e}")
+
+    def atualizar_info_pessoa(self, pessoa):
+        """Atualiza o label de informações da pessoa"""
+        if not pessoa:
+            self.info_pessoa_label.config(
+                text="Nenhuma pessoa selecionada", foreground="gray"
+            )
+            return
+
+        cpf = pessoa[2] or "Não informado"
+        email = pessoa[3] or "Não informado"
+
+        info_text = f"CPF: {cpf} | E-mail: {email}"
+        self.info_pessoa_label.config(text=info_text, foreground="black")
+
 
 class ContratoPFView:
     """Tela principal de listagem e gestão de contratos de pessoa física"""
@@ -2137,14 +2464,11 @@ class ContratoPFView:
         frame_acoes.pack(fill=tk.X, pady=(10, 0))
 
         criar_botao(frame_acoes, "Visualizar", self.visualizar, "Primario", 15).pack(
-            side=tk.LEFT, padx=(0, 5)
-        )
+            side=tk.LEFT, padx=(0, 5))
         criar_botao(frame_acoes, "Editar", self.editar, "Secundario", 15).pack(
-            side=tk.LEFT, padx=(0, 5)
-        )
+            side=tk.LEFT, padx=(0, 5))
         criar_botao(frame_acoes, "Excluir", self.excluir, "Perigo", 15).pack(
-            side=tk.LEFT, padx=(0, 5)
-        )
+            side=tk.LEFT, padx=(0, 5))
         criar_botao(
             frame_acoes, "Ver Produtos", self.ver_produtos, "Primario", 15
         ).pack(side=tk.LEFT)

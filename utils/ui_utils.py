@@ -313,6 +313,9 @@ class FormularioBase(ttk.Frame):
         )
         lbl.pack(side=tk.LEFT)
 
+        # Inicializar variável entrada
+        entrada = None
+
         # Entrada de dados conforme o tipo
         if tipo == "texto":
             entrada = ttk.Entry(frame, width=40)
@@ -329,8 +332,15 @@ class FormularioBase(ttk.Frame):
         elif tipo == "numero":
             entrada = ttk.Entry(frame, width=15)
             entrada.pack(side=tk.LEFT)
-        elif tipo == "opcoes" and opcoes:
-            var = tk.StringVar(value=padrao if padrao else opcoes[0])
+        elif tipo == "opcoes":
+            # Garantir que opcoes seja uma lista válida
+            if not opcoes:
+                opcoes = []
+            
+            # Definir valor padrão
+            valor_inicial = padrao if padrao and padrao in opcoes else (opcoes[0] if opcoes else "")
+            
+            var = tk.StringVar(value=valor_inicial)
             entrada = ttk.Combobox(
                 frame, values=opcoes, textvariable=var, state="readonly", width=38
             )
@@ -341,6 +351,10 @@ class FormularioBase(ttk.Frame):
             entrada.pack(side=tk.LEFT)
         elif tipo == "texto_longo":
             entrada = tk.Text(frame, width=38, height=4)
+            entrada.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        else:
+            # Caso padrão se nenhum tipo for reconhecido
+            entrada = ttk.Entry(frame, width=40)
             entrada.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # Define valor padrão se fornecido
