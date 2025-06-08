@@ -14,6 +14,7 @@ from controllers.aditivo_pf_controller import (
     adicionar_aditivo,
     excluir_aditivo,
 )
+from controllers.contrato_pf_controller import atualizar_total_contrato
 from utils.ui_utils import (
     FormularioBase,
     TabelaBase,
@@ -730,9 +731,15 @@ class AditivosTable:
 
             # Traduzir tipo de aditivo para exibição
             tipo_aditivo_exibicao = {
-                "prorrogacao": "Prorrogação",
-                "reajuste": "Reajuste",
-                "ambos": "Prorrogação e Reajuste",
+                "prorrogacao": "TEMPO",
+                "reajuste": "VALOR", 
+                "ambos": "TEMPO E VALOR",
+                "tempo": "TEMPO",
+                "valor": "VALOR",
+                "tempo e valor": "TEMPO E VALOR",
+                "TEMPO": "TEMPO",
+                "VALOR": "VALOR",
+                "TEMPO E VALOR": "TEMPO E VALOR",
             }.get(tipo_aditivo, tipo_aditivo)
 
             # Criar um dicionário com os valores do aditivo
@@ -828,6 +835,10 @@ class AditivosTable:
         ):
             try:
                 excluir_aditivo(id_selecao)
+                
+                # Atualizar o total do contrato após exclusão do aditivo
+                atualizar_total_contrato(self.id_contrato)
+                
                 mostrar_mensagem(
                     "Sucesso", "Aditivo excluído com sucesso!", tipo="sucesso"
                 )

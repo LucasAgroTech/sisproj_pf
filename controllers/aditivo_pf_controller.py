@@ -40,7 +40,7 @@ def adicionar_aditivo(
 
     Args:
         id_contrato (int): ID do contrato
-        tipo_aditivo (str): Tipo do aditivo (prorrogacao, reajuste, ambos)
+        tipo_aditivo (str): Tipo do aditivo (prorrogacao, reajuste, ambos, tempo, valor, tempo e valor)
         oficio (str, optional): Número do ofício
         data_entrada (str, optional): Data de entrada
         data_protocolo (str, optional): Data de protocolo

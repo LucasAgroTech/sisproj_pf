@@ -32,7 +32,7 @@ def create_aditivo_pf(
 
     Args:
         id_contrato (int): ID do contrato
-        tipo_aditivo (str): Tipo do aditivo (prorrogacao, reajuste, ambos)
+        tipo_aditivo (str): Tipo do aditivo (prorrogacao, reajuste, ambos, tempo, valor, tempo e valor)
         oficio (str, optional): Número do ofício
         data_entrada (str, optional): Data de entrada
         data_protocolo (str, optional): Data de protocolo
@@ -121,18 +121,26 @@ def create_aditivo_pf(
     aditivo_id = cursor.lastrowid
 
     # Atualizar o contrato conforme o tipo de aditivo
-    if tipo_aditivo == "prorrogacao" or tipo_aditivo == "ambos":
+    if tipo_aditivo in ["prorrogacao", "ambos", "tempo", "TEMPO", "tempo e valor", "TEMPO E VALOR"]:
         # Atualizar a vigência final e meses no contrato
         if vigencia_final:
+            # Obter dados atuais do contrato para calcular novos meses totais
+            cursor.execute("SELECT meses FROM contrato_pf WHERE id=?", (id_contrato,))
+            contrato_atual = cursor.fetchone()
+            meses_originais = contrato_atual[0] if contrato_atual else 0
+            
+            # Calcular total de meses (originais + adicionais)
+            meses_totais = meses_originais + (meses if meses else 0)
+            
             cursor.execute(
                 """
                 UPDATE contrato_pf SET vigencia_final=?, meses=?
                 WHERE id=?
             """,
-                (vigencia_final, meses, id_contrato),
+                (vigencia_final, meses_totais, id_contrato),
             )
 
-    if tipo_aditivo == "reajuste" or tipo_aditivo == "ambos":
+    if tipo_aditivo in ["reajuste", "ambos", "valor", "VALOR", "tempo e valor", "TEMPO E VALOR"]:
         # Atualizar a remuneração no contrato
         if nova_remuneracao:
             cursor.execute(
@@ -143,14 +151,8 @@ def create_aditivo_pf(
                 (nova_remuneracao, id_contrato),
             )
 
-    # Atualizar o valor total do contrato
-    cursor.execute(
-        """
-        UPDATE contrato_pf SET total_contrato = total_contrato + ?
-        WHERE id=?
-    """,
-        (valor_total_aditivo, id_contrato),
-    )
+    # Nota: O valor total do contrato será recalculado pela função atualizar_total_contrato()
+    # Removemos a atualização automática para evitar cálculos incorretos
 
     conn.commit()
     conn.close()
@@ -345,18 +347,31 @@ def update_aditivo_pf(
     )
 
     # Atualizar o contrato conforme o tipo de aditivo
-    if tipo_aditivo == "prorrogacao" or tipo_aditivo == "ambos":
+    if tipo_aditivo in ["prorrogacao", "ambos", "tempo", "TEMPO", "tempo e valor", "TEMPO E VALOR"]:
         # Atualizar a vigência final e meses no contrato
         if vigencia_final:
+            # Obter dados atuais do contrato para calcular novos meses totais
+            cursor.execute("SELECT meses FROM contrato_pf WHERE id=?", (id_contrato,))
+            contrato_atual = cursor.fetchone()
+            meses_originais = contrato_atual[0] if contrato_atual else 0
+            
+            # Para edição, recalcular os meses totais baseado no aditivo sendo editado
+            cursor.execute("SELECT meses FROM aditivo_pf WHERE id=?", (id_aditivo,))
+            aditivo_anterior = cursor.fetchone()
+            meses_aditivo_anterior = aditivo_anterior[0] if aditivo_anterior else 0
+            
+            # Calcular total de meses (atuais - antigo aditivo + novo aditivo)
+            meses_totais = meses_originais - meses_aditivo_anterior + (meses if meses else 0)
+            
             cursor.execute(
                 """
                 UPDATE contrato_pf SET vigencia_final=?, meses=?
                 WHERE id=?
             """,
-                (vigencia_final, meses, id_contrato),
+                (vigencia_final, meses_totais, id_contrato),
             )
 
-    if tipo_aditivo == "reajuste" or tipo_aditivo == "ambos":
+    if tipo_aditivo in ["reajuste", "ambos", "valor", "VALOR", "tempo e valor", "TEMPO E VALOR"]:
         # Atualizar a remuneração no contrato
         if nova_remuneracao:
             cursor.execute(
@@ -367,15 +382,8 @@ def update_aditivo_pf(
                 (nova_remuneracao, id_contrato),
             )
 
-    # Atualizar o valor total do contrato considerando a diferença
-    diferenca_valor = float(valor_total_aditivo) - valor_total_anterior
-    cursor.execute(
-        """
-        UPDATE contrato_pf SET total_contrato = total_contrato + ?
-        WHERE id=?
-    """,
-        (diferenca_valor, id_contrato),
-    )
+    # Nota: O valor total do contrato será recalculado pela função atualizar_total_contrato()
+    # Removemos a atualização automática para evitar cálculos incorretos
 
     conn.commit()
     conn.close()
@@ -428,14 +436,8 @@ def delete_aditivo_pf(id_aditivo):
     # Excluir o aditivo
     cursor.execute("DELETE FROM aditivo_pf WHERE id=?", (id_aditivo,))
 
-    # Atualizar o valor total do contrato
-    cursor.execute(
-        """
-        UPDATE contrato_pf SET total_contrato = total_contrato - ?
-        WHERE id=?
-    """,
-        (valor_aditivo, id_contrato),
-    )
+    # Nota: O valor total do contrato será recalculado pela função atualizar_total_contrato()
+    # Removemos a atualização automática para evitar cálculos incorretos
 
     conn.commit()
     conn.close()

@@ -211,7 +211,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS aditivo_pf (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         id_contrato INTEGER,
-        tipo_aditivo TEXT CHECK(tipo_aditivo IN ('prorrogacao', 'reajuste', 'ambos')),
+        tipo_aditivo TEXT CHECK(tipo_aditivo IN ('prorrogacao', 'reajuste', 'ambos', 'tempo', 'valor', 'tempo e valor', 'TEMPO', 'VALOR', 'TEMPO E VALOR')),
         oficio TEXT,
         data_entrada TEXT,
         data_protocolo TEXT,

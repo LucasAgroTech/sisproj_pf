@@ -379,7 +379,7 @@ def search_contratos_pf(termo_busca):
 
 def update_total_contrato(id_contrato):
     """
-    Recalcula e atualiza o valor total do contrato
+    Recalcula e atualiza o valor total do contrato incluindo aditivos
 
     Args:
         id_contrato (int): ID do contrato
@@ -387,10 +387,11 @@ def update_total_contrato(id_contrato):
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Buscar dados do contrato
+    # Buscar dados originais do contrato (valores base antes dos aditivos)
+    # Para isso, precisamos recalcular baseado na remuneração e meses originais
     cursor.execute(
         """
-        SELECT remuneracao, meses, intersticio, valor_intersticio, valor_complementar
+        SELECT intersticio, valor_intersticio, valor_complementar
         FROM contrato_pf WHERE id=?
     """,
         (id_contrato,),
@@ -399,16 +400,47 @@ def update_total_contrato(id_contrato):
     contrato = cursor.fetchone()
 
     if contrato:
-        # Calcula o novo total
-        remuneracao = float(contrato[0]) if contrato[0] else 0
-        meses = int(contrato[1]) if contrato[1] else 0
-        intersticio = int(contrato[2]) if contrato[2] else 0
+        # Valores fixos do contrato original
+        intersticio = int(contrato[0]) if contrato[0] else 0
         valor_intersticio = (
-            float(contrato[3]) if contrato[3] and intersticio == 1 else 0
+            float(contrato[1]) if contrato[1] and intersticio == 1 else 0
         )
-        valor_complementar = float(contrato[4]) if contrato[4] else 0
+        valor_complementar_original = float(contrato[2]) if contrato[2] else 0
 
-        total_contrato = (remuneracao * meses) + valor_intersticio + valor_complementar
+        # Buscar a remuneração e meses originais (antes de qualquer aditivo)
+        # Para isso, vamos buscar o primeiro registro histórico ou usar uma lógica diferente
+        # Por agora, vamos calcular baseado nos dados atuais e somar os aditivos
+        
+        # Primeiro, buscar os dados atuais do contrato
+        cursor.execute(
+            """
+            SELECT remuneracao, meses
+            FROM contrato_pf WHERE id=?
+        """,
+            (id_contrato,),
+        )
+        
+        dados_atuais = cursor.fetchone()
+        remuneracao_atual = float(dados_atuais[0]) if dados_atuais[0] else 0
+        meses_atual = int(dados_atuais[1]) if dados_atuais[1] else 0
+        
+        # Calcular valor base atual (com remuneração e meses possivelmente já alterados por aditivos)
+        total_base = (remuneracao_atual * meses_atual) + valor_intersticio + valor_complementar_original
+
+        # Buscar e somar todos os valores dos aditivos
+        cursor.execute(
+            """
+            SELECT COALESCE(SUM(valor_total_aditivo), 0)
+            FROM aditivo_pf WHERE id_contrato=?
+        """,
+            (id_contrato,),
+        )
+        
+        total_aditivos = cursor.fetchone()[0]
+        total_aditivos = float(total_aditivos) if total_aditivos else 0
+
+        # Total final do contrato = valor base + aditivos
+        total_contrato = total_base + total_aditivos
 
         # Atualiza o contrato
         cursor.execute(
