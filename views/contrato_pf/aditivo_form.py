@@ -170,7 +170,7 @@ class AditivoPFForm(ttk.Frame):
         ttk.Label(self.frame_tempo, text="Nova Vigência Final (Após Aditivo):").grid(row=0, column=0, sticky="w", padx=5)
         self.nova_vigencia_entry = ttk.Entry(self.frame_tempo)
         self.nova_vigencia_entry.grid(row=0, column=1, sticky="ew", padx=5)
-        self.nova_vigencia_entry.bind("<KeyRelease>", lambda e: formatar_data(self.nova_vigencia_entry, e))
+        self.nova_vigencia_entry.bind("<KeyRelease>", self.on_nova_vigencia_change)
         self.nova_vigencia_entry.bind("<KeyPress>", validar_numerico)
         self.nova_vigencia_entry.bind("<FocusOut>", self.calcular_meses_adicionais)
 
@@ -205,13 +205,21 @@ class AditivoPFForm(ttk.Frame):
         ttk.Label(self.frame_valor, text="Nova Remuneração:").grid(row=1, column=0, sticky="w", padx=5)
         self.nova_remuneracao_entry = ttk.Entry(self.frame_valor)
         self.nova_remuneracao_entry.grid(row=1, column=1, sticky="ew", padx=5)
-        self.nova_remuneracao_entry.bind("<KeyRelease>", lambda e: formatar_valor_brl(self.nova_remuneracao_entry, e))
+        self.nova_remuneracao_entry.bind("<KeyRelease>", self.on_nova_remuneracao_change)
         self.nova_remuneracao_entry.bind("<FocusOut>", self.calcular_diferenca_remuneracao)
 
+        # Data de início da nova remuneração
+        ttk.Label(self.frame_valor, text="Data Início Nova Remuneração:").grid(row=2, column=0, sticky="w", padx=5)
+        self.data_inicio_nova_remuneracao_entry = ttk.Entry(self.frame_valor)
+        self.data_inicio_nova_remuneracao_entry.grid(row=2, column=1, sticky="ew", padx=5)
+        self.data_inicio_nova_remuneracao_entry.bind("<KeyRelease>", self.on_data_inicio_change)
+        self.data_inicio_nova_remuneracao_entry.bind("<KeyPress>", validar_numerico)
+        self.data_inicio_nova_remuneracao_entry.bind("<FocusOut>", self.calcular_valores_aditivo)
+
         # Diferença de remuneração (calculado automaticamente)
-        ttk.Label(self.frame_valor, text="Diferença de Remuneração:").grid(row=2, column=0, sticky="w", padx=5)
+        ttk.Label(self.frame_valor, text="Diferença de Remuneração:").grid(row=3, column=0, sticky="w", padx=5)
         self.diferenca_entry = ttk.Entry(self.frame_valor, state="readonly")
-        self.diferenca_entry.grid(row=2, column=1, sticky="ew", padx=5)
+        self.diferenca_entry.grid(row=3, column=1, sticky="ew", padx=5)
 
         self.frame_valor.columnconfigure(1, weight=1)
 
@@ -222,7 +230,7 @@ class AditivoPFForm(ttk.Frame):
         ttk.Label(self.frame_complementar, text="Valor Complementar:").grid(row=0, column=0, sticky="w", padx=5)
         self.valor_complementar_entry = ttk.Entry(self.frame_complementar)
         self.valor_complementar_entry.grid(row=0, column=1, sticky="ew", padx=5)
-        self.valor_complementar_entry.bind("<KeyRelease>", lambda e: formatar_valor_brl(self.valor_complementar_entry, e))
+        self.valor_complementar_entry.bind("<KeyRelease>", self.on_valor_complementar_change)
         self.valor_complementar_entry.bind("<FocusOut>", self.calcular_valores_aditivo)
 
         self.frame_complementar.columnconfigure(1, weight=1)
@@ -374,6 +382,7 @@ class AditivoPFForm(ttk.Frame):
         self.nova_vigencia_entry.configure(state="disabled")
         self.meses_entry.configure(state="readonly")
         self.nova_remuneracao_entry.configure(state="disabled")
+        self.data_inicio_nova_remuneracao_entry.configure(state="disabled")
         self.diferenca_entry.configure(state="readonly")
         self.valor_complementar_entry.configure(state="disabled")
 
@@ -381,6 +390,7 @@ class AditivoPFForm(ttk.Frame):
             # Habilitar todos os campos
             self.nova_vigencia_entry.configure(state="normal")
             self.nova_remuneracao_entry.configure(state="normal")
+            self.data_inicio_nova_remuneracao_entry.configure(state="normal")
             self.valor_complementar_entry.configure(state="normal")
         elif tipo == "TEMPO":
             # Habilitar apenas campos de tempo
@@ -389,9 +399,38 @@ class AditivoPFForm(ttk.Frame):
         elif tipo == "VALOR":
             # Habilitar apenas campos de valor
             self.nova_remuneracao_entry.configure(state="normal")
+            self.data_inicio_nova_remuneracao_entry.configure(state="normal")
             self.valor_complementar_entry.configure(state="normal")
             
         # Recalcular valores após mudança de tipo
+        self.calcular_valores_aditivo()
+
+    def on_nova_vigencia_change(self, event=None):
+        """Evento ao mudar nova vigência - formatar data e calcular meses"""
+        # Primeiro formatar a data
+        formatar_data(self.nova_vigencia_entry, event)
+        # Depois calcular meses adicionais
+        self.calcular_meses_adicionais()
+
+    def on_nova_remuneracao_change(self, event=None):
+        """Evento ao mudar nova remuneração - formatar valor e calcular diferença"""
+        # Primeiro formatar o valor
+        formatar_valor_brl(self.nova_remuneracao_entry, event)
+        # Depois calcular diferença de remuneração
+        self.calcular_diferenca_remuneracao()
+
+    def on_data_inicio_change(self, event=None):
+        """Evento ao mudar data de início - formatar data e recalcular valores"""
+        # Primeiro formatar a data
+        formatar_data(self.data_inicio_nova_remuneracao_entry, event)
+        # Depois recalcular valores
+        self.calcular_valores_aditivo()
+
+    def on_valor_complementar_change(self, event=None):
+        """Evento ao mudar valor complementar - formatar valor e recalcular"""
+        # Primeiro formatar o valor
+        formatar_valor_brl(self.valor_complementar_entry, event)
+        # Depois recalcular valores
         self.calcular_valores_aditivo()
 
     def calcular_meses_adicionais(self, event=None):
@@ -399,6 +438,10 @@ class AditivoPFForm(ttk.Frame):
         try:
             nova_vigencia = self.nova_vigencia_entry.get().strip()
             if not nova_vigencia or len(nova_vigencia) != 10:
+                # Limpar campo de meses se data não estiver completa
+                self.meses_entry.configure(state="normal")
+                self.meses_entry.delete(0, tk.END)
+                self.meses_entry.configure(state="readonly")
                 return
 
             # Converter datas para calcular diferença
@@ -441,9 +484,13 @@ class AditivoPFForm(ttk.Frame):
         """Calcula a diferença entre a remuneração atual e a nova remuneração"""
         try:
             remuneracao_atual_valor = float(self.contrato[18])
-            nova_remuneracao_str = self.nova_remuneracao_entry.get()
+            nova_remuneracao_str = self.nova_remuneracao_entry.get().strip()
             
-            if not nova_remuneracao_str:
+            if not nova_remuneracao_str or nova_remuneracao_str in ["R$", "R$ "]:
+                # Limpar campo de diferença se não há valor válido
+                self.diferenca_entry.configure(state="normal")
+                self.diferenca_entry.delete(0, tk.END)
+                self.diferenca_entry.configure(state="readonly")
                 return
                 
             nova_remuneracao_valor = converter_valor_brl_para_float(nova_remuneracao_str)
@@ -464,7 +511,10 @@ class AditivoPFForm(ttk.Frame):
             self.calcular_valores_aditivo()
             
         except Exception as e:
-            print(f"Erro ao calcular diferença de remuneração: {e}")
+            # Limpar campo de diferença em caso de erro
+            self.diferenca_entry.configure(state="normal")
+            self.diferenca_entry.delete(0, tk.END)
+            self.diferenca_entry.configure(state="readonly")
 
     def calcular_valores_aditivo(self, event=None):
         """Calcula automaticamente os valores do aditivo e o total após o aditivo"""
@@ -482,6 +532,7 @@ class AditivoPFForm(ttk.Frame):
             remuneracao_atual = float(self.contrato[18] or 0)
             meses_contrato_original = int(self.contrato[16] or 0)
             valor_atual_contrato = float(self.contrato[22] or 0)
+            vigencia_final_original = self.contrato[15]  # YYYY-MM-DD
             
             # Inicializar variáveis
             valor_aditivo = 0
@@ -493,7 +544,7 @@ class AditivoPFForm(ttk.Frame):
             # Obter valor complementar
             try:
                 valor_complementar_str = self.valor_complementar_entry.get().strip()
-                if valor_complementar_str:
+                if valor_complementar_str and valor_complementar_str not in ["R$", "R$ ", ""]:
                     valor_complementar = converter_valor_brl_para_float(valor_complementar_str)
                 else:
                     valor_complementar = 0
@@ -502,7 +553,7 @@ class AditivoPFForm(ttk.Frame):
             
             # Calcular baseado no tipo de aditivo
             if tipo_aditivo == "TEMPO":
-                # Apenas extensão de tempo
+                # Apenas extensão de tempo - usar remuneração atual
                 meses_str = self.meses_entry.get().strip()
                 if meses_str:
                     try:
@@ -513,13 +564,40 @@ class AditivoPFForm(ttk.Frame):
                         pass
                     
             elif tipo_aditivo == "VALOR":
-                # Apenas reajuste de valor
-                diferenca_str = self.diferenca_entry.get().strip()
-                if diferenca_str:
+                # Apenas reajuste de valor - calcular meses restantes considerando data de início
+                nova_remuneracao_str = self.nova_remuneracao_entry.get().strip()
+                data_inicio_str = self.data_inicio_nova_remuneracao_entry.get().strip()
+                
+                if nova_remuneracao_str and nova_remuneracao_str not in ["R$", "R$ ", ""]:
                     try:
-                        diferenca_remuneracao = converter_valor_brl_para_float(diferenca_str)
-                        # Valor do aditivo = diferença * meses restantes do contrato + valor complementar
-                        valor_aditivo = (diferenca_remuneracao * meses_contrato_original) + valor_complementar
+                        nova_remuneracao = converter_valor_brl_para_float(nova_remuneracao_str)
+                        diferenca_remuneracao = nova_remuneracao - remuneracao_atual
+                        
+                        # Calcular meses desde a data de início até o fim do contrato
+                        meses_restantes = meses_contrato_original
+                        
+                        if data_inicio_str and len(data_inicio_str) == 10:
+                            try:
+                                from datetime import datetime
+                                data_inicio = datetime.strptime(data_inicio_str, "%d/%m/%Y")
+                                data_fim_contrato = datetime.strptime(vigencia_final_original, "%Y-%m-%d")
+                                
+                                # Calcular meses entre data de início da nova remuneração e fim do contrato
+                                diferenca_anos = data_fim_contrato.year - data_inicio.year
+                                diferenca_meses = data_fim_contrato.month - data_inicio.month
+                                meses_restantes = diferenca_anos * 12 + diferenca_meses
+                                
+                                # Ajustar se o dia final é menor que o inicial
+                                if data_fim_contrato.day < data_inicio.day:
+                                    meses_restantes -= 1
+                                    
+                                meses_restantes = max(0, meses_restantes)
+                            except Exception:
+                                pass  # Usar meses originais em caso de erro
+                        
+                        # Valor do aditivo = diferença * meses restantes + valor complementar
+                        valor_aditivo = (diferenca_remuneracao * meses_restantes) + valor_complementar
+                        
                     except Exception as e:
                         pass
                     
@@ -527,16 +605,44 @@ class AditivoPFForm(ttk.Frame):
                 # Extensão de tempo e reajuste de valor
                 meses_str = self.meses_entry.get().strip()
                 nova_remuneracao_str = self.nova_remuneracao_entry.get().strip()
-                diferenca_str = self.diferenca_entry.get().strip()
+                data_inicio_str = self.data_inicio_nova_remuneracao_entry.get().strip()
                 
-                if meses_str and nova_remuneracao_str and diferenca_str:
+                if meses_str and nova_remuneracao_str and nova_remuneracao_str not in ["R$", "R$ ", ""]:
                     try:
                         meses_adicionais = int(meses_str)
                         nova_remuneracao = converter_valor_brl_para_float(nova_remuneracao_str)
-                        diferenca_remuneracao = converter_valor_brl_para_float(diferenca_str)
+                        diferenca_remuneracao = nova_remuneracao - remuneracao_atual
                         
-                        # Valor do aditivo = (nova remuneração * meses adicionais) + (diferença * meses originais) + valor complementar
-                        valor_aditivo = (nova_remuneracao * meses_adicionais) + (diferenca_remuneracao * meses_contrato_original) + valor_complementar
+                        # Para TEMPO E VALOR, temos duas possibilidades:
+                        # 1. Se há data de início, aplicar nova remuneração a partir dessa data
+                        # 2. Se não há data de início, aplicar nova remuneração apenas aos meses adicionais
+                        
+                        if data_inicio_str and len(data_inicio_str) == 10:
+                            try:
+                                from datetime import datetime
+                                data_inicio = datetime.strptime(data_inicio_str, "%d/%m/%Y")
+                                data_fim_original = datetime.strptime(vigencia_final_original, "%Y-%m-%d")
+                                
+                                # Calcular meses desde data de início até fim original
+                                diferenca_anos = data_fim_original.year - data_inicio.year
+                                diferenca_meses = data_fim_original.month - data_inicio.month
+                                meses_desde_inicio = diferenca_anos * 12 + diferenca_meses
+                                
+                                if data_fim_original.day < data_inicio.day:
+                                    meses_desde_inicio -= 1
+                                    
+                                meses_desde_inicio = max(0, meses_desde_inicio)
+                                
+                                # Valor = (diferença * meses desde início até fim original) + (nova remuneração * meses adicionais)
+                                valor_aditivo = (diferenca_remuneracao * meses_desde_inicio) + (nova_remuneracao * meses_adicionais) + valor_complementar
+                                
+                            except Exception:
+                                # Fallback: nova remuneração apenas nos meses adicionais
+                                valor_aditivo = (nova_remuneracao * meses_adicionais) + valor_complementar
+                        else:
+                            # Sem data de início específica: nova remuneração apenas nos meses adicionais
+                            valor_aditivo = (nova_remuneracao * meses_adicionais) + valor_complementar
+                            
                     except Exception as e:
                         pass
             
@@ -579,6 +685,9 @@ class AditivoPFForm(ttk.Frame):
             if not self.nova_remuneracao_entry.get():
                 mostrar_mensagem("Erro de Validação", "Nova remuneração é obrigatória para este tipo de aditivo.", tipo="erro")
                 return
+            if not self.data_inicio_nova_remuneracao_entry.get():
+                mostrar_mensagem("Erro de Validação", "Data de início da nova remuneração é obrigatória para este tipo de aditivo.", tipo="erro")
+                return
 
         try:
             # Obter valores do formulário principal
@@ -596,6 +705,7 @@ class AditivoPFForm(ttk.Frame):
             meses = None
             nova_remuneracao = None
             diferenca_remuneracao = None
+            data_inicio_nova_remuneracao = None
 
             # Obter valores específicos por tipo
             if tipo_aditivo in ["TEMPO E VALOR", "TEMPO"]:
@@ -611,30 +721,70 @@ class AditivoPFForm(ttk.Frame):
 
             if tipo_aditivo in ["TEMPO E VALOR", "VALOR"]:
                 nova_remuneracao = converter_valor_brl_para_float(self.nova_remuneracao_entry.get())
-                diferenca_remuneracao = converter_valor_brl_para_float(self.diferenca_entry.get())
+                diferenca_remuneracao = nova_remuneracao - float(self.contrato[18])
+                
+                # Converter data de início da nova remuneração
+                data_inicio_str = self.data_inicio_nova_remuneracao_entry.get()
+                if data_inicio_str:
+                    from datetime import datetime
+                    data_obj = datetime.strptime(data_inicio_str, "%d/%m/%Y")
+                    data_inicio_nova_remuneracao = data_obj.strftime("%Y-%m-%d")
 
             # Converter valores monetários
             valor_complementar = converter_valor_brl_para_float(self.valor_complementar_entry.get())
 
-            # Calcular valor total do aditivo
+            # Calcular valor total do aditivo usando a mesma lógica do método calcular_valores_aditivo
             valor_total_aditivo = 0
             remuneracao_atual_valor = float(self.contrato[18])
+            vigencia_final_original = self.contrato[15]
 
             if tipo_aditivo == "TEMPO":
                 # Para extensão de tempo, usar a remuneração atual * meses
                 valor_total_aditivo = (remuneracao_atual_valor * meses) + valor_complementar
             elif tipo_aditivo == "VALOR":
-                # Para reajuste, pegar a diferença de remuneração * meses do contrato
-                meses_contrato = int(self.contrato[16])
-                valor_total_aditivo = (diferenca_remuneracao * meses_contrato) + valor_complementar
+                # Para reajuste, calcular meses restantes considerando data de início
+                meses_restantes = int(self.contrato[16])
+                
+                if data_inicio_nova_remuneracao:
+                    try:
+                        from datetime import datetime
+                        data_inicio = datetime.strptime(data_inicio_nova_remuneracao, "%Y-%m-%d")
+                        data_fim_contrato = datetime.strptime(vigencia_final_original, "%Y-%m-%d")
+                        
+                        diferenca_anos = data_fim_contrato.year - data_inicio.year
+                        diferenca_meses = data_fim_contrato.month - data_inicio.month
+                        meses_restantes = diferenca_anos * 12 + diferenca_meses
+                        
+                        if data_fim_contrato.day < data_inicio.day:
+                            meses_restantes -= 1
+                            
+                        meses_restantes = max(0, meses_restantes)
+                    except Exception:
+                        pass
+                
+                valor_total_aditivo = (diferenca_remuneracao * meses_restantes) + valor_complementar
             elif tipo_aditivo == "TEMPO E VALOR":
-                # Para ambos, somar a nova remuneração * novos meses + diferença de remuneração * meses antigos
-                meses_contrato = int(self.contrato[16])
-                valor_total_aditivo = (
-                    (nova_remuneracao * meses)
-                    + (diferenca_remuneracao * meses_contrato)
-                    + valor_complementar
-                )
+                # Para ambos, aplicar lógica baseada na data de início da nova remuneração
+                if data_inicio_nova_remuneracao:
+                    try:
+                        from datetime import datetime
+                        data_inicio = datetime.strptime(data_inicio_nova_remuneracao, "%Y-%m-%d")
+                        data_fim_original = datetime.strptime(vigencia_final_original, "%Y-%m-%d")
+                        
+                        diferenca_anos = data_fim_original.year - data_inicio.year
+                        diferenca_meses = data_fim_original.month - data_inicio.month
+                        meses_desde_inicio = diferenca_anos * 12 + diferenca_meses
+                        
+                        if data_fim_original.day < data_inicio.day:
+                            meses_desde_inicio -= 1
+                            
+                        meses_desde_inicio = max(0, meses_desde_inicio)
+                        
+                        valor_total_aditivo = (diferenca_remuneracao * meses_desde_inicio) + (nova_remuneracao * meses) + valor_complementar
+                    except Exception:
+                        valor_total_aditivo = (nova_remuneracao * meses) + valor_complementar
+                else:
+                    valor_total_aditivo = (nova_remuneracao * meses) + valor_complementar
 
             # Criar o aditivo
             aditivo_id = adicionar_aditivo(
@@ -644,6 +794,7 @@ class AditivoPFForm(ttk.Frame):
                 data_entrada=valores["data_entrada"],
                 data_protocolo=valores["data_protocolo"],
                 vigencia_final=nova_vigencia_final,
+                vigencia_inicial=data_inicio_nova_remuneracao,
                 meses=meses,
                 valor_aditivo=0,  # Será calculado pela soma dos outros valores
                 nova_remuneracao=nova_remuneracao,

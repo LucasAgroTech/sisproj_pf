@@ -117,6 +117,11 @@ class ContratoPFForm(ttk.Frame):
         # Forçar atualização dos valores após inicialização
         if self.modo_edicao and self.contrato:
             self.master.after(100, self.forcar_valores_contrato)
+            # Recalcular total após carregar dados do contrato
+            self.master.after(200, self.calcular_total)
+        else:
+            # Para novos contratos, garantir que o total seja calculado
+            self.master.after(100, self.calcular_total)
             
     def forcar_valores_contrato(self):
         """Força a atualização dos valores do contrato nos comboboxes após inicialização"""
@@ -512,6 +517,10 @@ class ContratoPFForm(ttk.Frame):
         self.form_contrato.adicionar_campo(
             "meses", "Meses", tipo="numero", padrao=meses_padrao, required=True
         )
+        # Configurar recálculo quando o campo de meses for alterado
+        meses_widget = self.form_contrato.campos["meses"]["widget"]
+        meses_widget.bind("<FocusOut>", self.calcular_total)
+        meses_widget.bind("<KeyRelease>", lambda e: self.master.after(500, self.calcular_total))
 
         # Status do contrato
         status_opcoes = [
@@ -548,7 +557,7 @@ class ContratoPFForm(ttk.Frame):
         # Configurar formatação para remuneração
         remuneracao_widget = self.form_contrato.campos["remuneracao"]["widget"]
         remuneracao_widget.bind(
-            "<KeyRelease>", lambda e: formatar_valor_brl(remuneracao_widget, e)
+            "<KeyRelease>", lambda e: self._on_remuneracao_change(remuneracao_widget, e)
         )
         remuneracao_widget.bind("<FocusOut>", self.calcular_total)
 
@@ -574,6 +583,10 @@ class ContratoPFForm(ttk.Frame):
                 self.form_contrato.campos["valor_intersticio"]["widget"].configure(state="normal")
             else:
                 self.form_contrato.campos["valor_intersticio"]["widget"].configure(state="disabled")
+                # Limpar o valor quando desabilitado
+                self.form_contrato.campos["valor_intersticio"]["widget"].delete(0, tk.END)
+            # Recalcular o total quando o interstício muda
+            self.calcular_total()
         
         # Adicionar trace para monitorar mudanças no checkbox
         intersticio_var.trace_add("write", atualizar_estado_valor_intersticio)
@@ -593,7 +606,7 @@ class ContratoPFForm(ttk.Frame):
             "widget"
         ]
         valor_intersticio_widget.bind(
-            "<KeyRelease>", lambda e: formatar_valor_brl(valor_intersticio_widget, e)
+            "<KeyRelease>", lambda e: self._on_valor_change(valor_intersticio_widget, e)
         )
         valor_intersticio_widget.bind("<FocusOut>", self.calcular_total)
         
@@ -616,7 +629,7 @@ class ContratoPFForm(ttk.Frame):
             "widget"
         ]
         valor_complementar_widget.bind(
-            "<KeyRelease>", lambda e: formatar_valor_brl(valor_complementar_widget, e)
+            "<KeyRelease>", lambda e: self._on_valor_change(valor_complementar_widget, e)
         )
         valor_complementar_widget.bind("<FocusOut>", self.calcular_total)
 
@@ -747,6 +760,18 @@ class ContratoPFForm(ttk.Frame):
                 .replace("X", "."),
             )
 
+    def _on_remuneracao_change(self, widget, event):
+        """Formata o valor da remuneração e programa recálculo do total"""
+        formatar_valor_brl(widget, event)
+        # Programa recálculo com delay para evitar muitos cálculos durante a digitação
+        self.master.after(500, self.calcular_total)
+        
+    def _on_valor_change(self, widget, event):
+        """Formata valores monetários e programa recálculo do total"""
+        formatar_valor_brl(widget, event)
+        # Programa recálculo com delay para evitar muitos cálculos durante a digitação
+        self.master.after(500, self.calcular_total)
+
     def calcular_meses(self, event=None):
         """Calcula a quantidade de meses entre as datas de vigência"""
         try:
@@ -776,13 +801,16 @@ class ContratoPFForm(ttk.Frame):
             print(f"Erro ao calcular meses: {e}")
 
     def calcular_total(self, event=None):
-        """Calcula o valor total do contrato"""
+        """
+        Calcula o valor total do contrato aplicando a seguinte regra:
+        TOTAL = (Remuneração × Meses) + Interstício (se houver) + Valor Complementar (se houver)
+        """
         try:
-            # Obter valores
-            remuneracao = self.form_contrato.campos["remuneracao"]["widget"].get()
-            meses = self.form_contrato.campos["meses"]["widget"].get()
+            # Obter valores dos campos
+            remuneracao = self.form_contrato.campos["remuneracao"]["widget"].get().strip()
+            meses = self.form_contrato.campos["meses"]["widget"].get().strip()
 
-            # Para o checkbox, precisamos acessar o valor diretamente
+            # Para o checkbox de interstício, precisamos acessar o valor diretamente
             campo_intersticio = self.form_contrato.campos["intersticio"]
             try:
                 # Tenta acessar a variável associada ao checkbox
@@ -795,31 +823,26 @@ class ContratoPFForm(ttk.Frame):
                 # Se ocorrer qualquer erro, assume falso
                 intersticio = False
 
-            valor_intersticio = self.form_contrato.campos["valor_intersticio"][
-                "widget"
-            ].get()
-            valor_complementar = self.form_contrato.campos["valor_complementar"][
-                "widget"
-            ].get()
+            valor_intersticio = self.form_contrato.campos["valor_intersticio"]["widget"].get().strip()
+            valor_complementar = self.form_contrato.campos["valor_complementar"]["widget"].get().strip()
 
-            # Converter valores
-            remuneracao_float = converter_valor_brl_para_float(remuneracao)
-            meses_int = int(meses) if meses.strip() else 0
+            # Converter valores para cálculo
+            remuneracao_float = converter_valor_brl_para_float(remuneracao) if remuneracao else 0
+            meses_int = int(meses) if meses else 0
+            
+            # Valor do interstício só é considerado se o checkbox estiver marcado
             valor_intersticio_float = (
-                converter_valor_brl_para_float(valor_intersticio) if intersticio else 0
+                converter_valor_brl_para_float(valor_intersticio) if intersticio and valor_intersticio else 0
             )
-            valor_complementar_float = converter_valor_brl_para_float(
-                valor_complementar
-            )
+            valor_complementar_float = converter_valor_brl_para_float(valor_complementar) if valor_complementar else 0
 
-            # Calcular total
-            total = (
-                (remuneracao_float * meses_int)
-                + valor_intersticio_float
-                + valor_complementar_float
-            )
+            # Aplicar a regra de cálculo: Total = (Remuneração × Meses) + Interstício + Valor Complementar
+            total = (remuneracao_float * meses_int) + valor_intersticio_float + valor_complementar_float
+            
+            # Garantir que o total não seja negativo
+            total = max(0, total)
 
-            # Atualizar o campo de total
+            # Atualizar o campo de total com formatação brasileira
             total_widget = self.form_contrato.campos["total_contrato"]["widget"]
             total_widget.delete(0, tk.END)
             total_widget.insert(
@@ -830,7 +853,8 @@ class ContratoPFForm(ttk.Frame):
             )
 
         except Exception as e:
-            print(f"Erro ao calcular total: {e}")
+            print(f"Erro ao calcular total do contrato: {e}")
+            # Em caso de erro, não atualizar o campo para não confundir o usuário
 
     def salvar(self):
         """Salva os dados do formulário"""
