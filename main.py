@@ -1,6 +1,6 @@
 # Main.Py
 import tkinter as tk
-from models.db_manager import init_db
+from models.db_manager_access import init_db
 from views.login_view import LoginView
 from controllers.auth_controller import login
 from views.dashboard_view import DashboardView

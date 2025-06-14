@@ -1,5 +1,5 @@
 # Contrato Pf Model.Py
-from .db_manager import get_connection
+from .db_manager_access import get_connection, validate_list_value
 from datetime import datetime
 
 
@@ -27,6 +27,8 @@ def create_contrato_pf(
     valor_complementar=0,
     total_contrato=0,
     observacoes=None,
+    lotacao=None,
+    exercicio=None
 ):
     """
     Cria um novo contrato de pessoa física
@@ -55,60 +57,86 @@ def create_contrato_pf(
         valor_complementar (float, optional): Valor complementar
         total_contrato (float, optional): Valor total do contrato
         observacoes (str, optional): Observações
+        lotacao (str, optional): Lotação do contrato
+        exercicio (str, optional): Exercício do contrato
 
     Returns:
         int: ID do contrato criado
+        
+    Raises:
+        ValueError: Se modalidade, natureza_demanda, status_contrato, lotacao ou exercicio não existirem na tabela lists
     """
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Calcula o total se não for fornecido
-    if total_contrato == 0:
-        total_contrato = (remuneracao * meses) + valor_intersticio + valor_complementar
+    try:
+        # Validar valores contra a tabela lists
+        validations = [
+            ("modalidade_contrato", modalidade),
+            ("natureza_demanda", natureza_demanda),
+            ("status_contrato", status_contrato),
+            ("lotacao", lotacao),
+            ("exercicio", exercicio)
+        ]
+        
+        for column, value in validations:
+            if not validate_list_value(cursor, column, value):
+                raise ValueError(f"Valor '{value}' não encontrado na lista de {column}")
 
-    cursor.execute(
-        """
-        INSERT INTO contrato_pf (
-            codigo_demanda, id_pessoa_fisica, instituicao, instrumento, subprojeto, ta, pta, acao,
-            resultado, meta, modalidade, natureza_demanda, numero_contrato, vigencia_inicial, 
-            vigencia_final, meses, status_contrato, remuneracao, intersticio, valor_intersticio, 
-            valor_complementar, total_contrato, observacoes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """,
-        (
-            codigo_demanda,
-            id_pessoa_fisica,
-            instituicao,
-            instrumento,
-            subprojeto,
-            ta,
-            pta,
-            acao,
-            resultado,
-            meta,
-            modalidade,
-            natureza_demanda,
-            numero_contrato,
-            vigencia_inicial,
-            vigencia_final,
-            meses,
-            status_contrato,
-            remuneracao,
-            intersticio,
-            valor_intersticio,
-            valor_complementar,
-            total_contrato,
-            observacoes,
-        ),
-    )
+        # Calcula o total se não for fornecido
+        if total_contrato == 0:
+            total_contrato = (remuneracao * meses) + valor_intersticio + valor_complementar
 
-    # Obter o ID do contrato inserido
-    contrato_id = cursor.lastrowid
+        cursor.execute(
+            """
+            INSERT INTO contrato_pf (
+                codigo_demanda, id_pessoa_fisica, instituicao, instrumento, subprojeto, ta, pta, acao,
+                resultado, meta, modalidade, natureza_demanda, numero_contrato, vigencia_inicial, 
+                vigencia_final, meses, status_contrato, remuneracao, intersticio, valor_intersticio, 
+                valor_complementar, total_contrato, observacoes, lotacao, exercicio
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                codigo_demanda,
+                id_pessoa_fisica,
+                instituicao,
+                instrumento,
+                subprojeto,
+                ta,
+                pta,
+                acao,
+                resultado,
+                meta,
+                modalidade,
+                natureza_demanda,
+                numero_contrato,
+                vigencia_inicial,
+                vigencia_final,
+                meses,
+                status_contrato,
+                remuneracao,
+                intersticio,
+                valor_intersticio,
+                valor_complementar,
+                total_contrato,
+                observacoes,
+                lotacao,
+                exercicio
+            ),
+        )
 
-    conn.commit()
-    conn.close()
+        # Obter o ID do contrato inserido usando SELECT @@IDENTITY
+        cursor.execute("SELECT @@IDENTITY")
+        contrato_id = cursor.fetchone()[0]
 
-    return contrato_id
+        conn.commit()
+        return contrato_id
+        
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
 def get_all_contratos_pf():
@@ -123,10 +151,10 @@ def get_all_contratos_pf():
     cursor.execute(
         """
         SELECT c.*, p.nome_completo 
-        FROM contrato_pf c
-        JOIN pessoa_fisica p ON c.id_pessoa_fisica = p.id
+        FROM [contrato_pf] AS c 
+        INNER JOIN [pessoa_fisica] AS p ON c.id_pessoa_fisica = p.id
         ORDER BY c.id DESC
-    """
+        """
     )
     contratos = cursor.fetchall()
     conn.close()
@@ -149,11 +177,11 @@ def get_contratos_by_pessoa(id_pessoa_fisica):
     cursor.execute(
         """
         SELECT c.*, p.nome_completo 
-        FROM contrato_pf c
-        JOIN pessoa_fisica p ON c.id_pessoa_fisica = p.id
+        FROM ([contrato_pf] AS c
+        INNER JOIN [pessoa_fisica] AS p ON c.id_pessoa_fisica = p.id)
         WHERE c.id_pessoa_fisica = ?
         ORDER BY c.id DESC
-    """,
+        """,
         (id_pessoa_fisica,),
     )
     contratos = cursor.fetchall()
@@ -177,11 +205,11 @@ def get_contratos_by_demanda(codigo_demanda):
     cursor.execute(
         """
         SELECT c.*, p.nome_completo 
-        FROM contrato_pf c
-        JOIN pessoa_fisica p ON c.id_pessoa_fisica = p.id
+        FROM ([contrato_pf] AS c
+        INNER JOIN [pessoa_fisica] AS p ON c.id_pessoa_fisica = p.id)
         WHERE c.codigo_demanda = ?
         ORDER BY c.id DESC
-    """,
+        """,
         (codigo_demanda,),
     )
     contratos = cursor.fetchall()
@@ -205,10 +233,10 @@ def get_contrato_by_id(id_contrato):
     cursor.execute(
         """
         SELECT c.*, p.nome_completo 
-        FROM contrato_pf c
-        JOIN pessoa_fisica p ON c.id_pessoa_fisica = p.id
+        FROM ([contrato_pf] AS c
+        INNER JOIN [pessoa_fisica] AS p ON c.id_pessoa_fisica = p.id)
         WHERE c.id = ?
-    """,
+        """,
         (id_contrato,),
     )
     contrato = cursor.fetchone()
@@ -244,6 +272,8 @@ def update_contrato_pf(
     valor_complementar=0,
     total_contrato=0,
     observacoes=None,
+    lotacao=None,
+    exercicio=None
 ):
     """
     Atualiza um contrato de pessoa física
@@ -251,53 +281,77 @@ def update_contrato_pf(
     Args:
         id_contrato (int): ID do contrato
         [outros parâmetros iguais ao create_contrato_pf]
+        
+    Raises:
+        ValueError: Se modalidade, natureza_demanda, status_contrato, lotacao ou exercicio não existirem na tabela lists
     """
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Calcula o total se não for fornecido
-    if total_contrato == 0:
-        total_contrato = (remuneracao * meses) + valor_intersticio + valor_complementar
+    try:
+        # Validar valores contra a tabela lists
+        validations = [
+            ("modalidade_contrato", modalidade),
+            ("natureza_demanda", natureza_demanda),
+            ("status_contrato", status_contrato),
+            ("lotacao", lotacao),
+            ("exercicio", exercicio)
+        ]
+        
+        for column, value in validations:
+            if not validate_list_value(cursor, column, value):
+                raise ValueError(f"Valor '{value}' não encontrado na lista de {column}")
 
-    cursor.execute(
-        """
-        UPDATE contrato_pf SET
-            codigo_demanda=?, id_pessoa_fisica=?, instituicao=?, instrumento=?, subprojeto=?, ta=?, pta=?, acao=?,
-            resultado=?, meta=?, modalidade=?, natureza_demanda=?, numero_contrato=?, vigencia_inicial=?, 
-            vigencia_final=?, meses=?, status_contrato=?, remuneracao=?, intersticio=?, valor_intersticio=?, 
-            valor_complementar=?, total_contrato=?, observacoes=?
-        WHERE id=?
-    """,
-        (
-            codigo_demanda,
-            id_pessoa_fisica,
-            instituicao,
-            instrumento,
-            subprojeto,
-            ta,
-            pta,
-            acao,
-            resultado,
-            meta,
-            modalidade,
-            natureza_demanda,
-            numero_contrato,
-            vigencia_inicial,
-            vigencia_final,
-            meses,
-            status_contrato,
-            remuneracao,
-            intersticio,
-            valor_intersticio,
-            valor_complementar,
-            total_contrato,
-            observacoes,
-            id_contrato,
-        ),
-    )
+        # Calcula o total se não for fornecido
+        if total_contrato == 0:
+            total_contrato = (remuneracao * meses) + valor_intersticio + valor_complementar
 
-    conn.commit()
-    conn.close()
+        cursor.execute(
+            """
+            UPDATE contrato_pf SET
+                codigo_demanda=?, id_pessoa_fisica=?, instituicao=?, instrumento=?, subprojeto=?, ta=?, pta=?, acao=?,
+                resultado=?, meta=?, modalidade=?, natureza_demanda=?, numero_contrato=?, vigencia_inicial=?, 
+                vigencia_final=?, meses=?, status_contrato=?, remuneracao=?, intersticio=?, valor_intersticio=?, 
+                valor_complementar=?, total_contrato=?, observacoes=?, lotacao=?, exercicio=?
+            WHERE id=?
+        """,
+            (
+                codigo_demanda,
+                id_pessoa_fisica,
+                instituicao,
+                instrumento,
+                subprojeto,
+                ta,
+                pta,
+                acao,
+                resultado,
+                meta,
+                modalidade,
+                natureza_demanda,
+                numero_contrato,
+                vigencia_inicial,
+                vigencia_final,
+                meses,
+                status_contrato,
+                remuneracao,
+                intersticio,
+                valor_intersticio,
+                valor_complementar,
+                total_contrato,
+                observacoes,
+                lotacao,
+                exercicio,
+                id_contrato,
+            ),
+        )
+
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
 def delete_contrato_pf(id_contrato):

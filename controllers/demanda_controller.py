@@ -6,42 +6,58 @@ from models.demanda_model import (
     update_demanda,
     delete_demanda,
 )
+from models.db_manager_access import get_connection
 from utils.session import Session
 from utils.logger import log_action
 
 
 def adicionar_demanda(
-    data_entrada, solicitante, data_protocolo, oficio, nup_sei, status
+    data_entrada,
+    solicitante,
+    data_protocolo,
+    oficio,
+    nup_sei,
 ):
     """
     Adiciona uma nova demanda
 
     Args:
-        data_entrada (str): Data de entrada da demanda
-        solicitante (str): Nome do solicitante
-        data_protocolo (str): Data de protocolo
+        data_entrada (str): Data de entrada
+        solicitante (str): Solicitante
+        data_protocolo (str): Data do protocolo
         oficio (str): Número do ofício
         nup_sei (str): Número do NUP/SEI
-        status (str): Status da demanda
 
     Returns:
-        int: ID da demanda criada
+        int: ID da demanda adicionada
     """
+    conn = get_connection()
+    cursor = conn.cursor()
+
     try:
-        demanda_id = create_demanda(
-            data_entrada, solicitante, data_protocolo, oficio, nup_sei, status
+        # Inserir demanda
+        cursor.execute(
+            """
+            INSERT INTO demanda (
+                data_entrada, solicitante, data_protocolo,
+                oficio, nup_sei
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (data_entrada, solicitante, data_protocolo, oficio, nup_sei),
         )
 
-        # Registrar a ação no log
-        usuario = Session.get_user()
-        if usuario:
-            log_action(usuario[1], f"Cadastro de Demanda: {oficio} (ID: {demanda_id})")
+        # Obter o ID da demanda inserida
+        cursor.execute("SELECT @@IDENTITY")
+        id_demanda = cursor.fetchone()[0]
 
-        return demanda_id
+        conn.commit()
+        return id_demanda
 
     except Exception as e:
-        # Repassar a exceção para ser tratada na view
+        conn.rollback()
         raise Exception(f"Erro ao adicionar demanda: {str(e)}")
+    finally:
+        conn.close()
 
 
 def listar_demandas():
@@ -68,33 +84,50 @@ def buscar_demanda_por_id(codigo):
 
 
 def editar_demanda(
-    codigo, data_entrada, solicitante, data_protocolo, oficio, nup_sei, status
+    codigo_demanda,
+    data_entrada,
+    solicitante,
+    data_protocolo,
+    oficio,
+    nup_sei,
 ):
     """
-    Edita uma demanda
+    Edita uma demanda existente
 
     Args:
-        codigo (int): Código da demanda
-        data_entrada (str): Data de entrada da demanda
-        solicitante (str): Nome do solicitante
-        data_protocolo (str): Data de protocolo
+        codigo_demanda (int): Código da demanda
+        data_entrada (str): Data de entrada
+        solicitante (str): Solicitante
+        data_protocolo (str): Data do protocolo
         oficio (str): Número do ofício
         nup_sei (str): Número do NUP/SEI
-        status (str): Status da demanda
+
+    Returns:
+        bool: True se a edição foi bem sucedida
     """
+    conn = get_connection()
+    cursor = conn.cursor()
+
     try:
-        update_demanda(
-            codigo, data_entrada, solicitante, data_protocolo, oficio, nup_sei, status
+        # Atualizar demanda
+        cursor.execute(
+            """
+            UPDATE demanda SET
+                data_entrada = ?, solicitante = ?, data_protocolo = ?,
+                oficio = ?, nup_sei = ?
+            WHERE codigo = ?
+            """,
+            (data_entrada, solicitante, data_protocolo, oficio, nup_sei, codigo_demanda),
         )
 
-        # Registrar a ação no log
-        usuario = Session.get_user()
-        if usuario:
-            log_action(usuario[1], f"Edição de Demanda: {oficio} (ID: {codigo})")
+        conn.commit()
+        return True
 
     except Exception as e:
-        # Repassar a exceção para ser tratada na view
+        conn.rollback()
         raise Exception(f"Erro ao editar demanda: {str(e)}")
+    finally:
+        conn.close()
 
 
 def excluir_demanda(codigo):

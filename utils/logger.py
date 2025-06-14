@@ -1,5 +1,5 @@
 # Logger.Py
-from models.db_manager import get_connection
+from models.db_manager_access import get_connection
 
 
 def log_action(usuario, acao):

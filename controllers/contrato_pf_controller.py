@@ -10,6 +10,7 @@ from models.contrato_pf_model import (
     search_contratos_pf,
     update_total_contrato,
 )
+from models.db_manager_access import get_connection
 from utils.session import Session
 from utils.logger import log_action
 
@@ -34,10 +35,12 @@ def adicionar_contrato(
     status_contrato,
     remuneracao,
     intersticio,
-    valor_intersticio=0,
-    valor_complementar=0,
-    total_contrato=0,
-    observacoes=None,
+    valor_intersticio,
+    valor_complementar,
+    total_contrato,
+    observacoes,
+    lotacao,
+    exercicio,
 ):
     """
     Adiciona um novo contrato de pessoa física
@@ -53,22 +56,24 @@ def adicionar_contrato(
         acao (str): Ação
         resultado (str): Resultado
         meta (str): Meta
-        modalidade (str): Modalidade do contrato (bolsa, produto, RPA, CLT)
-        natureza_demanda (str): Natureza da demanda (novo, renovacao)
+        modalidade (str): Modalidade do contrato
+        natureza_demanda (str): Natureza da demanda
         numero_contrato (str): Número do contrato
         vigencia_inicial (str): Data de início da vigência
-        vigencia_final (str): Data final da vigência
+        vigencia_final (str): Data de fim da vigência
         meses (int): Quantidade de meses
         status_contrato (str): Status do contrato
         remuneracao (float): Valor da remuneração
-        intersticio (int): Se tem interstício (0=não, 1=sim)
-        valor_intersticio (float, optional): Valor do interstício
-        valor_complementar (float, optional): Valor complementar
-        total_contrato (float, optional): Valor total do contrato
-        observacoes (str, optional): Observações
+        intersticio (int): Se tem interstício (0 ou 1)
+        valor_intersticio (float): Valor do interstício
+        valor_complementar (float): Valor complementar
+        total_contrato (float): Valor total do contrato
+        observacoes (str): Observações
+        lotacao (str): Lotação
+        exercicio (str): Exercício
 
     Returns:
-        int: ID do contrato criado
+        int: ID do contrato adicionado
     """
     try:
         try:
@@ -118,6 +123,8 @@ def adicionar_contrato(
             valor_complementar_float,
             total_contrato,
             observacoes,
+            lotacao,
+            exercicio,
         )
 
         # Registrar a ação no log
@@ -137,12 +144,51 @@ def adicionar_contrato(
 
 def listar_contratos():
     """
-    Lista todos os contratos de pessoa física
+    Lista todos os contratos
 
     Returns:
-        list: Lista de contratos
+        list: Lista de tuplas com os contratos
     """
-    return get_all_contratos_pf()
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Buscar contratos com nome da pessoa
+        cursor.execute(
+            """
+            SELECT c.id, c.codigo_demanda, c.id_pessoa_fisica, c.instituicao, c.instrumento, 
+                   c.subprojeto, c.ta, c.pta, c.acao, c.resultado, c.meta, c.modalidade, 
+                   c.natureza_demanda, c.numero_contrato, c.vigencia_inicial, c.vigencia_final, 
+                   c.meses, c.status_contrato, c.remuneracao, c.intersticio, c.valor_intersticio, 
+                   c.valor_complementar, c.total_contrato, c.observacoes, c.lotacao, c.exercicio,
+                   p.nome_completo
+            FROM contrato_pf c
+            LEFT JOIN pessoa_fisica p ON c.id_pessoa_fisica = p.id
+            ORDER BY c.id DESC
+            """
+        )
+        contratos = cursor.fetchall()
+
+        # Converter para lista para poder modificar
+        contratos = [list(contrato) for contrato in contratos]
+
+        # Formatar valores monetários
+        for contrato in contratos:
+            if contrato[18] is not None:  # remuneracao
+                contrato[18] = float(contrato[18])
+            if contrato[20] is not None:  # valor_intersticio
+                contrato[20] = float(contrato[20])
+            if contrato[21] is not None:  # valor_complementar
+                contrato[21] = float(contrato[21])
+            if contrato[22] is not None:  # total_contrato
+                contrato[22] = float(contrato[22])
+
+        return contratos
+
+    except Exception as e:
+        raise Exception(f"Erro ao listar contratos: {str(e)}")
+    finally:
+        conn.close()
 
 
 def listar_contratos_por_pessoa(id_pessoa_fisica):
@@ -179,9 +225,49 @@ def buscar_contrato_por_id(id_contrato):
         id_contrato (int): ID do contrato
 
     Returns:
-        tuple: Dados do contrato ou None
+        tuple: Dados do contrato ou None se não encontrado
     """
-    return get_contrato_by_id(id_contrato)
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Buscar contrato com nome da pessoa
+        cursor.execute(
+            """
+            SELECT c.id, c.codigo_demanda, c.id_pessoa_fisica, c.instituicao, c.instrumento, 
+                   c.subprojeto, c.ta, c.pta, c.acao, c.resultado, c.meta, c.modalidade, 
+                   c.natureza_demanda, c.numero_contrato, c.vigencia_inicial, c.vigencia_final, 
+                   c.meses, c.status_contrato, c.remuneracao, c.intersticio, c.valor_intersticio, 
+                   c.valor_complementar, c.total_contrato, c.observacoes, c.lotacao, c.exercicio,
+                   p.nome_completo
+            FROM contrato_pf c
+            LEFT JOIN pessoa_fisica p ON c.id_pessoa_fisica = p.id
+            WHERE c.id = ?
+            """,
+            (id_contrato,),
+        )
+        contrato = cursor.fetchone()
+
+        if contrato:
+            # Converter para lista para poder modificar
+            contrato = list(contrato)
+            
+            # Formatar valores monetários
+            if contrato[18] is not None:  # remuneracao
+                contrato[18] = float(contrato[18])
+            if contrato[20] is not None:  # valor_intersticio
+                contrato[20] = float(contrato[20])
+            if contrato[21] is not None:  # valor_complementar
+                contrato[21] = float(contrato[21])
+            if contrato[22] is not None:  # total_contrato
+                contrato[22] = float(contrato[22])
+
+        return contrato
+
+    except Exception as e:
+        raise Exception(f"Erro ao buscar contrato: {str(e)}")
+    finally:
+        conn.close()
 
 
 def editar_contrato(
@@ -205,17 +291,46 @@ def editar_contrato(
     status_contrato,
     remuneracao,
     intersticio,
-    valor_intersticio=0,
-    valor_complementar=0,
-    total_contrato=0,
-    observacoes=None,
+    valor_intersticio,
+    valor_complementar,
+    total_contrato,
+    observacoes,
+    lotacao,
+    exercicio,
 ):
     """
-    Edita um contrato de pessoa física
+    Edita um contrato de pessoa física existente
 
     Args:
-        id_contrato (int): ID do contrato
-        [outros parâmetros iguais ao adicionar_contrato]
+        id_contrato (int): ID do contrato a ser editado
+        codigo_demanda (int): Código da demanda
+        id_pessoa_fisica (int): ID da pessoa física
+        instituicao (str): Instituição
+        instrumento (str): Instrumento
+        subprojeto (str): Subprojeto
+        ta (str): TA
+        pta (str): PTA
+        acao (str): Ação
+        resultado (str): Resultado
+        meta (str): Meta
+        modalidade (str): Modalidade do contrato
+        natureza_demanda (str): Natureza da demanda
+        numero_contrato (str): Número do contrato
+        vigencia_inicial (str): Data de início da vigência
+        vigencia_final (str): Data de fim da vigência
+        meses (int): Quantidade de meses
+        status_contrato (str): Status do contrato
+        remuneracao (float): Valor da remuneração
+        intersticio (int): Se tem interstício (0 ou 1)
+        valor_intersticio (float): Valor do interstício
+        valor_complementar (float): Valor complementar
+        total_contrato (float): Valor total do contrato
+        observacoes (str): Observações
+        lotacao (str): Lotação
+        exercicio (str): Exercício
+
+    Returns:
+        bool: True se a edição foi bem sucedida
     """
     try:
         try:
@@ -266,6 +381,8 @@ def editar_contrato(
             valor_complementar_float,
             total_contrato,
             observacoes,
+            lotacao,
+            exercicio,
         )
 
         # Registrar a ação no log
@@ -275,6 +392,8 @@ def editar_contrato(
                 usuario[1],
                 f"Edição de Contrato PF: {numero_contrato} (ID: {id_contrato})",
             )
+
+        return True
 
     except Exception as e:
         # Repassar a exceção para ser tratada na view

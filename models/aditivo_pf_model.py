@@ -1,5 +1,5 @@
 # Aditivo Pf Model.Py
-from .db_manager import get_connection
+from .db_manager_access import get_connection
 from datetime import datetime
 
 
@@ -117,8 +117,9 @@ def create_aditivo_pf(
         ),
     )
 
-    # Obter o ID do aditivo inserido
-    aditivo_id = cursor.lastrowid
+    # Obter o ID do aditivo inserido usando SELECT @@IDENTITY
+    cursor.execute("SELECT @@IDENTITY")
+    aditivo_id = cursor.fetchone()[0]
 
     # Atualizar o contrato conforme o tipo de aditivo
     if tipo_aditivo in ["prorrogacao", "ambos", "tempo", "TEMPO", "tempo e valor", "TEMPO E VALOR"]:
@@ -172,11 +173,11 @@ def get_all_aditivos_pf():
     cursor.execute(
         """
         SELECT a.*, c.numero_contrato, p.nome_completo
-        FROM aditivo_pf a
-        JOIN contrato_pf c ON a.id_contrato = c.id
-        JOIN pessoa_fisica p ON c.id_pessoa_fisica = p.id
+        FROM ([aditivo_pf] AS a
+        INNER JOIN [contrato_pf] AS c ON a.id_contrato = c.id)
+        INNER JOIN [pessoa_fisica] AS p ON c.id_pessoa_fisica = p.id
         ORDER BY a.id DESC
-    """
+        """
     )
     aditivos = cursor.fetchall()
     conn.close()
@@ -186,7 +187,7 @@ def get_all_aditivos_pf():
 
 def get_aditivos_by_contrato(id_contrato):
     """
-    Retorna os aditivos de um contrato específico
+    Obtém todos os aditivos de um contrato
 
     Args:
         id_contrato (int): ID do contrato
@@ -199,12 +200,12 @@ def get_aditivos_by_contrato(id_contrato):
     cursor.execute(
         """
         SELECT a.*, c.numero_contrato, p.nome_completo
-        FROM aditivo_pf a
-        JOIN contrato_pf c ON a.id_contrato = c.id
-        JOIN pessoa_fisica p ON c.id_pessoa_fisica = p.id
+        FROM ([aditivo_pf] AS a
+        INNER JOIN [contrato_pf] AS c ON a.id_contrato = c.id)
+        INNER JOIN [pessoa_fisica] AS p ON c.id_pessoa_fisica = p.id
         WHERE a.id_contrato = ?
         ORDER BY a.id ASC
-    """,
+        """,
         (id_contrato,),
     )
     aditivos = cursor.fetchall()
@@ -228,11 +229,11 @@ def get_aditivo_by_id(id_aditivo):
     cursor.execute(
         """
         SELECT a.*, c.numero_contrato, p.nome_completo
-        FROM aditivo_pf a
-        JOIN contrato_pf c ON a.id_contrato = c.id
-        JOIN pessoa_fisica p ON c.id_pessoa_fisica = p.id
+        FROM ([aditivo_pf] AS a
+        INNER JOIN [contrato_pf] AS c ON a.id_contrato = c.id)
+        INNER JOIN [pessoa_fisica] AS p ON c.id_pessoa_fisica = p.id
         WHERE a.id = ?
-    """,
+        """,
         (id_aditivo,),
     )
     aditivo = cursor.fetchone()

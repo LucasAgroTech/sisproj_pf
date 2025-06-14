@@ -1,5 +1,6 @@
 # Pessoa Fisica Model.Py
-from .db_manager import get_connection
+from .db_manager_access import get_connection
+from datetime import datetime
 
 
 def create_pessoa_fisica(nome_completo, cpf=None, email=None, telefone=None):
@@ -18,28 +19,43 @@ def create_pessoa_fisica(nome_completo, cpf=None, email=None, telefone=None):
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Verificar se já existe um registro com o mesmo CPF
-    if cpf:
-        cursor.execute("SELECT id FROM pessoa_fisica WHERE cpf=?", (cpf,))
-        if cursor.fetchone():
-            conn.close()
-            raise ValueError(f"Já existe uma pessoa cadastrada com o CPF {cpf}")
+    try:
+        # Verificar se já existe um registro com o mesmo CPF
+        if cpf:
+            cursor.execute("SELECT id FROM pessoa_fisica WHERE cpf=?", (cpf,))
+            if cursor.fetchone():
+                raise ValueError(f"Já existe uma pessoa cadastrada com o CPF {cpf}")
 
-    cursor.execute(
-        """
-        INSERT INTO pessoa_fisica (nome_completo, cpf, email, telefone)
-        VALUES (?, ?, ?, ?)
-    """,
-        (nome_completo, cpf, email, telefone),
-    )
+        # Data atual no formato brasileiro
+        data_cadastro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
-    # Obter o ID da pessoa inserida
-    pessoa_id = cursor.lastrowid
+        cursor.execute(
+            """
+            INSERT INTO pessoa_fisica (nome_completo, cpf, email, telefone, data_cadastro)
+            VALUES (?, ?, ?, ?, ?)
+        """,
+            (nome_completo, cpf, email, telefone, data_cadastro),
+        )
 
-    conn.commit()
-    conn.close()
+        # Obter o ID da pessoa inserida usando o CPF ou nome como referência
+        cursor.execute(
+            """
+            SELECT TOP 1 id FROM pessoa_fisica 
+            WHERE nome_completo=? AND (cpf=? OR (cpf IS NULL AND ? IS NULL))
+            ORDER BY id DESC
+        """,
+            (nome_completo, cpf, cpf),
+        )
+        
+        pessoa_id = cursor.fetchone()[0]
+        conn.commit()
+        return pessoa_id
 
-    return pessoa_id
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
 def get_all_pessoas_fisicas():

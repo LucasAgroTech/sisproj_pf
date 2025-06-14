@@ -90,20 +90,24 @@ class DashboardView:
 
         # Cria cards com estatísticas
         try:
+            # Frame para organizar os cards em linha
+            frame_cards = ttk.Frame(frame_resumo)
+            frame_cards.pack(fill=tk.X)
+            
             self.criar_card_estatistica(
-                frame_resumo, "Pessoas Físicas", len(listar_pessoas()), "#388E3C"
+                frame_cards, "Pessoas Físicas", len(listar_pessoas()), "#388E3C"
             )
             self.criar_card_estatistica(
-                frame_resumo, "Contratos", len(listar_contratos()), "#1976D2"
+                frame_cards, "Contratos", len(listar_contratos()), "#1976D2"
             )
             self.criar_card_estatistica(
-                frame_resumo, "Produtos", len(listar_produtos()), "#D32F2F"
+                frame_cards, "Produtos", len(listar_produtos()), "#D32F2F"
             )
         except Exception as e:
             # Se as tabelas ainda não existirem ou houver outro erro
-            self.criar_card_estatistica(frame_resumo, "Pessoas Físicas", 0, "#388E3C")
-            self.criar_card_estatistica(frame_resumo, "Contratos", 0, "#1976D2")
-            self.criar_card_estatistica(frame_resumo, "Produtos", 0, "#D32F2F")
+            self.criar_card_estatistica(frame_cards, "Pessoas Físicas", 0, "#388E3C")
+            self.criar_card_estatistica(frame_cards, "Contratos", 0, "#1976D2")
+            self.criar_card_estatistica(frame_cards, "Produtos", 0, "#D32F2F")
 
         # Frame com tabelas de atividade recente
         frame_atividade = ttk.Frame(self.frame_conteudo)

@@ -4,34 +4,37 @@ import os
 from datetime import datetime
 
 # Caminho para o banco Access
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "sisproj_pf.accdb")
+DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "sisproj_pf.accdb"))
 
 
 def get_connection():
     """Retorna uma conexão com o banco de dados Access"""
-    # String de conexão para Access usando ODBC
+    # Tenta primeiro com ACE OLEDB
     conn_str = (
-        f"DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};"
-        f"DBQ={DB_PATH};"
-        f"PWD=;"
+        f"Provider=Microsoft.ACE.OLEDB.12.0;"
+        f"Data Source={DB_PATH};"
     )
     
     try:
         conn = pyodbc.connect(conn_str)
         return conn
     except pyodbc.Error as e:
-        # Tenta usar driver alternativo se o primeiro falhar
+        # Se falhar, tenta com o driver ODBC
         try:
-            conn_str_alt = (
-                f"Provider=Microsoft.ACE.OLEDB.12.0;"
-                f"Data Source={DB_PATH};"
-                f"Persist Security Info=False;"
+            conn_str = (
+                f"DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};"
+                f"DBQ={DB_PATH};"
             )
-            import pypyodbc
-            conn = pypyodbc.connect(f"DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={DB_PATH};")
+            conn = pyodbc.connect(conn_str)
             return conn
-        except Exception as e2:
-            raise Exception(f"Erro ao conectar com Access: {e}. Erro alternativo: {e2}")
+        except pyodbc.Error as e2:
+            # Se ambos falharem, tenta com pypyodbc
+            try:
+                import pypyodbc
+                conn = pypyodbc.connect(f"DRIVER={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={DB_PATH};")
+                return conn
+            except Exception as e3:
+                raise Exception(f"Erro ao conectar com Access. Tentativas:\n1) ACE OLEDB: {e}\n2) ODBC: {e2}\n3) pypyodbc: {e3}")
 
 
 def execute_query(query, params=None):
@@ -69,19 +72,15 @@ def init_db():
     cursor = conn.cursor()
     
     try:
-        # Verificar se as tabelas já existem
-        existing_tables = []
-        cursor.execute("SELECT Name FROM MSysObjects WHERE Type=1 AND Flags=0")
-        for row in cursor.fetchall():
-            existing_tables.append(row[0].lower())
-
-        # Criar tabela users se não existir
-        if 'users' not in existing_tables:
+        # Criar tabelas - se já existirem, o erro será ignorado
+        
+        # Criar tabela users
+        try:
             cursor.execute("""
                 CREATE TABLE users (
-                    id AUTOINCREMENT PRIMARY KEY,
-                    username TEXT(50) NOT NULL,
-                    password TEXT(255) NOT NULL
+                    id COUNTER PRIMARY KEY,
+                    username TEXT(50),
+                    password TEXT(255)
                 )
             """)
             
@@ -90,53 +89,76 @@ def init_db():
             
             # Inserir usuário admin padrão
             cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", ("admin", "admin"))
+            print("Tabela users criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela users: {e}")
+                raise e
+            print("Tabela users já existe.")
 
-        # Criar tabela logs se não existir
-        if 'logs' not in existing_tables:
+        # Criar tabela logs
+        try:
             cursor.execute("""
                 CREATE TABLE logs (
-                    id AUTOINCREMENT PRIMARY KEY,
-                    usuario TEXT(50) NOT NULL,
-                    acao TEXT(255) NOT NULL,
-                    data_hora DATETIME DEFAULT NOW()
+                    id COUNTER PRIMARY KEY,
+                    usuario TEXT(50),
+                    acao TEXT(255),
+                    data_hora DATETIME
                 )
             """)
+            print("Tabela logs criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela logs: {e}")
+                raise e
+            print("Tabela logs já existe.")
 
-        # Criar tabela demanda se não existir
-        if 'demanda' not in existing_tables:
+        # Criar tabela demanda
+        try:
             cursor.execute("""
                 CREATE TABLE demanda (
-                    codigo AUTOINCREMENT PRIMARY KEY,
+                    codigo COUNTER PRIMARY KEY,
                     data_entrada TEXT(10),
                     solicitante TEXT(255),
                     data_protocolo TEXT(10),
                     oficio TEXT(50),
-                    nup_sei TEXT(50),
-                    status TEXT(50)
+                    nup_sei TEXT(50)
                 )
             """)
+            print("Tabela demanda criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela demanda: {e}")
+                raise e
+            print("Tabela demanda já existe.")
 
-        # Criar tabela pessoa_fisica se não existir
-        if 'pessoa_fisica' not in existing_tables:
+        # Criar tabela pessoa_fisica
+        try:
             cursor.execute("""
                 CREATE TABLE pessoa_fisica (
-                    id AUTOINCREMENT PRIMARY KEY,
-                    nome_completo TEXT(255) NOT NULL,
+                    id COUNTER PRIMARY KEY,
+                    nome_completo TEXT(255),
                     cpf TEXT(14),
                     email TEXT(100),
                     telefone TEXT(20),
-                    data_cadastro DATETIME DEFAULT NOW()
+                    data_cadastro DATETIME
                 )
             """)
             
             # Criar índice único para CPF
             cursor.execute("CREATE UNIQUE INDEX idx_pessoa_fisica_cpf ON pessoa_fisica (cpf)")
+            print("Tabela pessoa_fisica criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela pessoa_fisica: {e}")
+                raise e
+            print("Tabela pessoa_fisica já existe.")
 
-        # Criar tabela contrato_pf se não existir
-        if 'contrato_pf' not in existing_tables:
+        # Criar tabela contrato_pf
+        try:
             cursor.execute("""
                 CREATE TABLE contrato_pf (
-                    id AUTOINCREMENT PRIMARY KEY,
+                    id COUNTER PRIMARY KEY,
                     codigo_demanda LONG,
                     id_pessoa_fisica LONG,
                     instituicao TEXT(255),
@@ -159,15 +181,23 @@ def init_db():
                     valor_intersticio CURRENCY,
                     valor_complementar CURRENCY,
                     total_contrato CURRENCY,
-                    observacoes MEMO
+                    observacoes MEMO,
+                    lotacao TEXT(255),
+                    exercicio TEXT(50)
                 )
             """)
+            print("Tabela contrato_pf criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela contrato_pf: {e}")
+                raise e
+            print("Tabela contrato_pf já existe.")
 
-        # Criar tabela aditivo_pf se não existir  
-        if 'aditivo_pf' not in existing_tables:
+        # Criar tabela aditivo_pf
+        try:
             cursor.execute("""
                 CREATE TABLE aditivo_pf (
-                    id AUTOINCREMENT PRIMARY KEY,
+                    id COUNTER PRIMARY KEY,
                     id_contrato LONG,
                     tipo_aditivo TEXT(50),
                     oficio TEXT(50),
@@ -190,15 +220,21 @@ def init_db():
                     valor_complementar CURRENCY,
                     valor_total_aditivo CURRENCY,
                     responsavel TEXT(100),
-                    data_atualizacao DATETIME DEFAULT NOW()
+                    data_atualizacao DATETIME
                 )
             """)
+            print("Tabela aditivo_pf criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela aditivo_pf: {e}")
+                raise e
+            print("Tabela aditivo_pf já existe.")
 
-        # Criar tabela produto_pf se não existir
-        if 'produto_pf' not in existing_tables:
+        # Criar tabela produto_pf
+        try:
             cursor.execute("""
                 CREATE TABLE produto_pf (
-                    id AUTOINCREMENT PRIMARY KEY,
+                    id COUNTER PRIMARY KEY,
                     id_contrato LONG,
                     numero TEXT(20),
                     data_programada TEXT(10),
@@ -209,20 +245,97 @@ def init_db():
                     valor CURRENCY
                 )
             """)
+            print("Tabela produto_pf criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela produto_pf: {e}")
+                raise e
+            print("Tabela produto_pf já existe.")
 
-        # Criar tabela custeio se não existir
-        if 'custeio' not in existing_tables:
+        # Criar tabela custeio
+        try:
             cursor.execute("""
                 CREATE TABLE custeio (
-                    id AUTOINCREMENT PRIMARY KEY,
+                    id COUNTER PRIMARY KEY,
                     instituicao_parceira TEXT(255),
                     cod_projeto TEXT(50),
                     cod_ta TEXT(50),
                     resultado TEXT(255),
                     subprojeto TEXT(255),
-                    created_at DATETIME DEFAULT NOW()
+                    created_at DATETIME
                 )
             """)
+            print("Tabela custeio criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela custeio: {e}")
+                raise e
+            print("Tabela custeio já existe.")
+
+        # Criar tabela lists
+        try:
+            cursor.execute("""
+                CREATE TABLE lists (
+                    id COUNTER PRIMARY KEY,
+                    exercicio TEXT(50),
+                    lotacao TEXT(255),
+                    solicitante TEXT(255),
+                    modalidade_contrato TEXT(50),
+                    natureza_demanda TEXT(50),
+                    status_contrato TEXT(50)
+                )
+            """)
+            print("Tabela lists criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela lists: {e}")
+                raise e
+            print("Tabela lists já existe.")
+
+        # Criar tabela modalidade_contrato
+        try:
+            cursor.execute("""
+                CREATE TABLE modalidade_contrato (
+                    id COUNTER PRIMARY KEY,
+                    modalidade TEXT(50)
+                )
+            """)
+            print("Tabela modalidade_contrato criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela modalidade_contrato: {e}")
+                raise e
+            print("Tabela modalidade_contrato já existe.")
+
+        # Criar tabela natureza_demanda
+        try:
+            cursor.execute("""
+                CREATE TABLE natureza_demanda (
+                    id COUNTER PRIMARY KEY,
+                    natureza TEXT(50)
+                )
+            """)
+            print("Tabela natureza_demanda criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela natureza_demanda: {e}")
+                raise e
+            print("Tabela natureza_demanda já existe.")
+
+        # Criar tabela status_contrato
+        try:
+            cursor.execute("""
+                CREATE TABLE status_contrato (
+                    id COUNTER PRIMARY KEY,
+                    status TEXT(50)
+                )
+            """)
+            print("Tabela status_contrato criada com sucesso!")
+        except Exception as e:
+            if "já existe" not in str(e):
+                print(f"Erro ao criar tabela status_contrato: {e}")
+                raise e
+            print("Tabela status_contrato já existe.")
 
         conn.commit()
         print("Banco de dados Access inicializado com sucesso!")
@@ -324,6 +437,60 @@ def migrate_from_sqlite():
     finally:
         sqlite_conn.close()
         access_conn.close()
+
+
+def get_lists_data():
+    """Retorna os dados das tabelas de listas"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        print("Buscando dados da tabela lists...")
+        
+        # Buscar todos os dados da tabela lists
+        cursor.execute("SELECT exercicio, lotacao, solicitante, modalidade_contrato, natureza_demanda, status_contrato FROM lists")
+        lists_result = cursor.fetchall()
+        print(f"Dados da tabela lists: {lists_result}")
+        
+        # Organizar os dados em listas únicas
+        exercicios = sorted(list(set(row[0] for row in lists_result if row[0])))
+        lotacoes = sorted(list(set(row[1] for row in lists_result if row[1])))
+        solicitantes = sorted(list(set(row[2] for row in lists_result if row[2])))
+        modalidades = sorted(list(set(row[3] for row in lists_result if row[3])))
+        naturezas = sorted(list(set(row[4] for row in lists_result if row[4])))
+        status = sorted(list(set(row[5] for row in lists_result if row[5])))
+        
+        return {
+            'exercicios': exercicios,
+            'lotacoes': lotacoes,
+            'solicitantes': solicitantes,
+            'modalidades': modalidades,
+            'naturezas': naturezas,
+            'status': status
+        }
+    except Exception as e:
+        print(f"Erro ao buscar dados da tabela lists: {e}")
+        # Se houver erro, retornar valores padrão
+        return {
+            'exercicios': [], 
+            'lotacoes': [], 
+            'solicitantes': [],
+            'modalidades': ["BOLSA", "PRODUTO", "RPA", "CLT"],  # valores padrão
+            'naturezas': ["NOVO", "RENOVAÇÃO"],  # valores padrão
+            'status': ["VIGENTE", "PENDENTE_ASSINATURA", "CANCELADO", "CONCLUIDO", "EM_TRAMITACAO", "AGUARDANDO_AUTORIZACAO", "NAO_AUTORIZADO", "RESCINDIDO"]  # valores padrão
+        }
+    finally:
+        conn.close()
+
+
+def validate_list_value(cursor, column_name, value):
+    """Valida se um valor existe na coluna especificada da tabela lists"""
+    if value is None:
+        return True
+        
+    cursor.execute(f"SELECT COUNT(*) FROM lists WHERE {column_name} = ?", (value,))
+    count = cursor.fetchone()[0]
+    return count > 0
 
 
 if __name__ == "__main__":

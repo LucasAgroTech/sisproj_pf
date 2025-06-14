@@ -1,8 +1,8 @@
 # Demanda Model.Py
-from .db_manager import get_connection
+from .db_manager_access import get_connection, validate_list_value
 
 
-def create_demanda(data_entrada, solicitante, data_protocolo, oficio, nup_sei, status):
+def create_demanda(data_entrada, solicitante, data_protocolo, oficio, nup_sei):
     """
     Cria uma nova demanda
 
@@ -12,28 +12,41 @@ def create_demanda(data_entrada, solicitante, data_protocolo, oficio, nup_sei, s
         data_protocolo (str): Data de protocolo
         oficio (str): Número do ofício
         nup_sei (str): Número do NUP/SEI
-        status (str): Status da demanda
 
     Returns:
         int: ID da demanda criada
+        
+    Raises:
+        ValueError: Se o solicitante não existir na tabela lists
     """
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO demanda (data_entrada, solicitante, data_protocolo, oficio, nup_sei, status)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """,
-        (data_entrada, solicitante, data_protocolo, oficio, nup_sei, status),
-    )
+    
+    try:
+        # Validar solicitante
+        if not validate_list_value(cursor, "solicitante", solicitante):
+            raise ValueError(f"Solicitante '{solicitante}' não encontrado na lista de valores válidos")
+            
+        cursor.execute(
+            """
+            INSERT INTO demanda (data_entrada, solicitante, data_protocolo, oficio, nup_sei)
+            VALUES (?, ?, ?, ?, ?)
+        """,
+            (data_entrada, solicitante, data_protocolo, oficio, nup_sei),
+        )
 
-    # Obter o ID da demanda inserida
-    demanda_id = cursor.lastrowid
-
-    conn.commit()
-    conn.close()
-
-    return demanda_id
+        # Obter o ID da demanda inserida usando SELECT @@IDENTITY
+        cursor.execute("SELECT @@IDENTITY")
+        demanda_id = cursor.fetchone()[0]
+        
+        conn.commit()
+        return demanda_id
+        
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
 def get_all_demandas():
@@ -73,11 +86,9 @@ def get_demanda_by_id(codigo):
     return None
 
 
-def update_demanda(
-    codigo, data_entrada, solicitante, data_protocolo, oficio, nup_sei, status
-):
+def update_demanda(codigo, data_entrada, solicitante, data_protocolo, oficio, nup_sei):
     """
-    Atualiza uma demanda
+    Atualiza uma demanda existente
 
     Args:
         codigo (int): Código da demanda
@@ -86,20 +97,34 @@ def update_demanda(
         data_protocolo (str): Data de protocolo
         oficio (str): Número do ofício
         nup_sei (str): Número do NUP/SEI
-        status (str): Status da demanda
+        
+    Raises:
+        ValueError: Se o solicitante não existir na tabela lists
     """
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        UPDATE demanda SET 
-            data_entrada=?, solicitante=?, data_protocolo=?, oficio=?, nup_sei=?, status=?
-        WHERE codigo=?
-    """,
-        (data_entrada, solicitante, data_protocolo, oficio, nup_sei, status, codigo),
-    )
-    conn.commit()
-    conn.close()
+    
+    try:
+        # Validar solicitante
+        if not validate_list_value(cursor, "solicitante", solicitante):
+            raise ValueError(f"Solicitante '{solicitante}' não encontrado na lista de valores válidos")
+            
+        cursor.execute(
+            """
+            UPDATE demanda SET 
+                data_entrada=?, solicitante=?, data_protocolo=?, oficio=?, nup_sei=?
+            WHERE codigo=?
+        """,
+            (data_entrada, solicitante, data_protocolo, oficio, nup_sei, codigo),
+        )
+        
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 
 def delete_demanda(codigo):

@@ -1,5 +1,5 @@
 # User Model.Py
-from .db_manager import get_connection
+from .db_manager_access import get_connection
 
 
 def authenticate(username, password):

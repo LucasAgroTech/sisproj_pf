@@ -78,7 +78,7 @@ class CusteioManager:
                 if len(self.contrato) > 3 and self.contrato[3]:
                     self.aplicar_regras_instituicao(self.contrato[3])
         except Exception as e:
-            print(f"Erro ao forçar valores do contrato: {e}")
+            print(f"Erro ao forçar valores do contrato no custeio: {e}")
 
     def configurar_campos(self):
         """Configura os campos de custeio no formulário"""

@@ -2,6 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import tkinter.font as tkFont
+from datetime import datetime
 
 
 class Cores:
@@ -343,7 +344,7 @@ class FormularioBase(ttk.Frame):
             valor_inicial = padrao if padrao else (opcoes[0] if opcoes else "")
             
             # Se o valor padrão não estiver nas opções, adicioná-lo
-            if valor_inicial and valor_inicial not in opcoes and valor_inicial.strip():
+            if valor_inicial and valor_inicial not in opcoes and str(valor_inicial).strip():
                 opcoes.append(valor_inicial)
             
             var = tk.StringVar(value=valor_inicial)
@@ -442,77 +443,98 @@ class FormularioBase(ttk.Frame):
 
 
 class TabelaBase(ttk.Frame):
-    """Classe base para tabelas padronizadas"""
+    """Classe base para criação de tabelas"""
 
     def __init__(self, master, colunas, titulos=None):
         """
         Args:
             master: widget pai
-            colunas: lista de identificadores de colunas
-            titulos: dicionário mapeando colunas para títulos visíveis
+            colunas (list): Lista com os nomes das colunas
+            titulos (dict, optional): Dicionário com os títulos das colunas
         """
-        super().__init__(master, style="CardBorda.TFrame", padding=15)
+        super().__init__(master)
         self.colunas = colunas
-        self.titulos = titulos or {
-            col: col.replace("_", " ").title() for col in colunas
-        }
-
-        # Cria a tabela
+        self.titulos = titulos or {col: col for col in colunas}
         self.criar_tabela()
 
+    def formatar_data_br(self, data_str):
+        """
+        Formata uma data para o formato brasileiro
+        
+        Args:
+            data_str (str): Data no formato original
+            
+        Returns:
+            str: Data formatada no padrão brasileiro
+        """
+        if not data_str:
+            return ""
+            
+        try:
+            # Se a data já estiver no formato brasileiro, retorna como está
+            if "/" in data_str:
+                return data_str
+                
+            # Converte a data para o formato brasileiro
+            data = datetime.strptime(data_str, "%Y-%m-%d %H:%M:%S")
+            return data.strftime("%d/%m/%Y %H:%M:%S")
+        except:
+            return data_str
+
     def criar_tabela(self):
-        """Cria a estrutura da tabela"""
-        # Frame com barra de rolagem
-        frame = ttk.Frame(self)
-        frame.pack(fill=tk.BOTH, expand=True)
+        """Cria a tabela com as colunas especificadas"""
+        # Frame para a tabela
+        self.frame_tabela = ttk.Frame(self)
+        self.frame_tabela.pack(fill=tk.BOTH, expand=True)
 
-        # Barra de rolagem vertical
-        scrollbar = ttk.Scrollbar(frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # Barra de rolagem horizontal
-        h_scrollbar = ttk.Scrollbar(frame, orient=tk.HORIZONTAL)
-        h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
-
-        # Treeview (tabela)
+        # Criar Treeview
         self.tree = ttk.Treeview(
-            frame,
-            columns=self.colunas,
-            show="headings",
-            yscrollcommand=scrollbar.set,
-            xscrollcommand=h_scrollbar.set,
+            self.frame_tabela, columns=self.colunas, show="headings", selectmode="browse"
         )
-        self.tree.pack(fill=tk.BOTH, expand=True)
 
-        # Configura as barras de rolagem
-        scrollbar.config(command=self.tree.yview)
-        h_scrollbar.config(command=self.tree.xview)
-
-        # Configura as colunas
+        # Configurar cabeçalhos
         for col in self.colunas:
             self.tree.heading(col, text=self.titulos[col])
-            # Ajusta largura baseada no título
-            largura = max(100, len(self.titulos[col]) * 10)
-            self.tree.column(col, width=largura, minwidth=50)
+            self.tree.column(col, minwidth=100, width=150)
 
-        # Adiciona estilo de linhas alternadas para melhor legibilidade
-        self.tree.tag_configure("odd", background=Cores.BACKGROUND_CLARO)
-        self.tree.tag_configure("even", background=Cores.BACKGROUND)
+        # Adicionar scrollbars
+        vsb = ttk.Scrollbar(
+            self.frame_tabela, orient="vertical", command=self.tree.yview
+        )
+        hsb = ttk.Scrollbar(
+            self.frame_tabela, orient="horizontal", command=self.tree.xview
+        )
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        # Posicionar elementos
+        self.tree.grid(column=0, row=0, sticky="nsew")
+        vsb.grid(column=1, row=0, sticky="ns")
+        hsb.grid(column=0, row=1, sticky="ew")
+
+        self.frame_tabela.grid_columnconfigure(0, weight=1)
+        self.frame_tabela.grid_rowconfigure(0, weight=1)
 
     def adicionar_linha(self, valores, id=None):
-        """Adiciona uma linha à tabela
+        """
+        Adiciona uma linha na tabela
 
         Args:
-            valores: dicionário de valores para as colunas
-            id: identificador da linha (opcional)
+            valores (dict): Dicionário com os valores das colunas
+            id: Identificador único da linha (opcional)
         """
-        valores_lista = [valores.get(col, "") for col in self.colunas]
+        # Formatar valores especiais
+        valores_formatados = valores.copy()
+        if "data_cadastro" in valores_formatados:
+            valores_formatados["data_cadastro"] = self.formatar_data_br(valores_formatados["data_cadastro"])
 
-        # Aplica estilo de linha alternada
-        row_count = len(self.tree.get_children())
-        tag = "even" if row_count % 2 == 0 else "odd"
+        # Criar lista de valores na ordem das colunas
+        valores_lista = [valores_formatados.get(col, "") for col in self.colunas]
 
-        return self.tree.insert("", tk.END, values=valores_lista, iid=id, tags=(tag,))
+        # Inserir na tabela
+        if id is None:
+            self.tree.insert("", tk.END, values=valores_lista)
+        else:
+            self.tree.insert("", tk.END, iid=str(id), values=valores_lista)
 
     def atualizar_linha(self, id, valores):
         """Atualiza uma linha existente
@@ -922,3 +944,21 @@ def converter_valor_brl_para_float(valor_str):
         return float(valor_str)
     except ValueError:
         return 0.0
+
+
+def formatar_valor_brl_numerico(valor):
+    """
+    Formata um valor numérico para o formato de moeda brasileira (R$)
+    
+    Args:
+        valor (float): Valor a ser formatado
+        
+    Returns:
+        str: Valor formatado em R$
+    """
+    try:
+        if valor is None:
+            return ""
+        return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return ""

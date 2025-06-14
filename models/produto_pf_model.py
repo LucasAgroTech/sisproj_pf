@@ -1,5 +1,5 @@
 # Produto Pf Model.Py
-from .db_manager import get_connection
+from .db_manager_access import get_connection
 
 
 def create_produto_pf(
@@ -65,8 +65,9 @@ def create_produto_pf(
         ),
     )
 
-    # Obter o ID do produto inserido
-    produto_id = cursor.lastrowid
+    # Obter o ID do produto inserido usando SELECT @@IDENTITY
+    cursor.execute("SELECT @@IDENTITY")
+    produto_id = cursor.fetchone()[0]
 
     conn.commit()
     conn.close()
@@ -86,11 +87,11 @@ def get_all_produtos_pf():
     cursor.execute(
         """
         SELECT p.*, c.numero_contrato, pf.nome_completo
-        FROM produto_pf p
-        JOIN contrato_pf c ON p.id_contrato = c.id
-        JOIN pessoa_fisica pf ON c.id_pessoa_fisica = pf.id
+        FROM ([produto_pf] AS p
+        INNER JOIN [contrato_pf] AS c ON p.id_contrato = c.id)
+        INNER JOIN [pessoa_fisica] AS pf ON c.id_pessoa_fisica = pf.id
         ORDER BY p.id DESC
-    """
+        """
     )
     produtos = cursor.fetchall()
     conn.close()
@@ -113,12 +114,12 @@ def get_produtos_by_contrato(id_contrato):
     cursor.execute(
         """
         SELECT p.*, c.numero_contrato, pf.nome_completo
-        FROM produto_pf p
-        JOIN contrato_pf c ON p.id_contrato = c.id
-        JOIN pessoa_fisica pf ON c.id_pessoa_fisica = pf.id
+        FROM ([produto_pf] AS p
+        INNER JOIN [contrato_pf] AS c ON p.id_contrato = c.id)
+        INNER JOIN [pessoa_fisica] AS pf ON c.id_pessoa_fisica = pf.id
         WHERE p.id_contrato = ?
         ORDER BY p.numero
-    """,
+        """,
         (id_contrato,),
     )
     produtos = cursor.fetchall()
@@ -142,11 +143,11 @@ def get_produto_by_id(id_produto):
     cursor.execute(
         """
         SELECT p.*, c.numero_contrato, pf.nome_completo
-        FROM produto_pf p
-        JOIN contrato_pf c ON p.id_contrato = c.id
-        JOIN pessoa_fisica pf ON c.id_pessoa_fisica = pf.id
+        FROM ([produto_pf] AS p
+        INNER JOIN [contrato_pf] AS c ON p.id_contrato = c.id)
+        INNER JOIN [pessoa_fisica] AS pf ON c.id_pessoa_fisica = pf.id
         WHERE p.id = ?
-    """,
+        """,
         (id_produto,),
     )
     produto = cursor.fetchone()
